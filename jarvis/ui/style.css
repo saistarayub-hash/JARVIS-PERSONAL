@@ -104,6 +104,19 @@ button { cursor: pointer; }
                 z-index: 22; max-width: 84vw; }
 #offer-text { font-size: 13px; color: #dbeafe; }
 
+/* ---- markets ---- */
+#markets li.mkt { display: flex; justify-content: space-between; gap: 8px;
+                  font-size: 12.5px; padding: 2px 0;
+                  font-variant-numeric: tabular-nums; }
+#markets .sym { color: #94a3b8; letter-spacing: 0.06em; }
+#markets .px { flex: 1; text-align: right; color: #e2e8f0; }
+#markets .chg { width: 64px; text-align: right; }
+#markets .chg.up { color: #4ade80; }
+#markets .chg.down { color: #f87171; }
+.chip.tiny { font-size: 9px; padding: 1px 6px; vertical-align: middle; }
+.chip.amber { color: #fbbf24; border-color: rgba(251, 191, 36, 0.5); }
+.chip.green { color: #4ade80; border-color: rgba(74, 222, 128, 0.5); }
+
 /* ---- calendar ---- */
 #calendar li { font-size: 12.5px; padding: 3px 0; }
 #calendar li.past { opacity: 0.45; text-decoration: line-through; }

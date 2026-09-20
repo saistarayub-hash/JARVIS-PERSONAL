@@ -139,6 +139,37 @@ function renderLearned(facts, habits) {
     habitsEl.appendChild(li);
   });
 }
+function renderMarkets(snap) {
+  const el = $("#markets"), chip = $("#mkt-src");
+  if (!snap || !snap.ok) {
+    el.innerHTML = '<li class="empty">Markets unreachable from here.</li>';
+    chip.classList.add("hidden");
+    return;
+  }
+  chip.classList.remove("hidden");
+  chip.textContent = snap.simulated ? "SIM FEED" : (snap.source || "live");
+  chip.className = "chip tiny" + (snap.simulated ? " amber" : " green");
+  el.innerHTML = "";
+  const rows = [];
+  Object.entries(snap.pairs || {}).forEach(([s, r]) =>
+    rows.push([s, r.price < 50 ? r.price.toFixed(4) : r.price.toLocaleString(), r.chg_pct]));
+  Object.entries(snap.crypto || {}).forEach(([s, r]) =>
+    rows.push([s, "$" + r.price.toLocaleString(), r.chg_pct]));
+  Object.entries(snap.indices || {}).forEach(([s, r]) =>
+    rows.push([s, r.price.toLocaleString(), r.chg_pct]));
+  rows.forEach(([sym, px, chg]) => {
+    const li = document.createElement("li");
+    li.className = "mkt";
+    const cls = chg > 0 ? "up" : chg < 0 ? "down" : "";
+    li.innerHTML = `<span class="sym">${sym}</span><span class="px">${px}</span>`
+      + `<span class="chg ${cls}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`;
+    el.appendChild(li);
+  });
+}
+function refreshMarkets() {
+  fetch("/api/markets").then((r) => r.json()).then(renderMarkets).catch(() => {});
+}
+
 function renderCalendar(events) {
   calendarEl.innerHTML = "";
   if (!events || !events.length) {
@@ -318,7 +349,9 @@ function handle(m) {
       renderCalendar(m.calendar || []);
       renderActivity(m.activity || []);
       renderPreps(m.preps || []);
+      renderMarkets(m.markets);
       break;
+    case "markets": renderMarkets(m); break;
     case "state": setState(m.state); break;
     case "level": currentLevel = m.value; break;
     case "user": userLine.textContent = m.text; break;
@@ -397,5 +430,7 @@ $("#mic").onclick = async () => {
   }
 };
 
+refreshCalendar();
+refreshMarkets();
 connect();
 })();

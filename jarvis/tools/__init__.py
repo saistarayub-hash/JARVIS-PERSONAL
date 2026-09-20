@@ -49,4 +49,5 @@ def specs() -> list:
     return out
 
 
-from . import system, apps, web, files, memory_tools, calendar_tools  # noqa: E402,F401
+from . import (system, apps, web, files, memory_tools,  # noqa: E402,F401
+               calendar_tools, market_tools)

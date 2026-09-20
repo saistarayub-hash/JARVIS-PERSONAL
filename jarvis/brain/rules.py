@@ -15,14 +15,18 @@ from typing import Dict, Optional, Tuple
 from ..tools import execute
 
 HELP_TEXT = (
-    "I can: tell the time and date, check the weather, open apps, search the web, "
-    "find files, do math, adjust volume, check laptop health, tell jokes — and I "
-    "learn what you tell me without being asked. Calendar: 'meetings today', "
-    "'add a meeting with Sam at 3 pm', 'cancel design sync', 'import my calendar "
-    "from work.ics'. Fleet: 'status of all devices', 'run disk on web-01', "
-    "'watch web-01' (I'll alert you if it drops), 'screenshot my-mac' (what's on "
-    "its screen). Prep: 'brief me', 'prep work', 'take care of work' (background, "
-    "with a report back). 'quiet for 30 minutes' and I'll actually stay quiet."
+    "I can: tell the time and date anywhere in the world, check the weather, "
+    "open apps, search the web, READ any URL you paste, find files, do math, "
+    "adjust volume, check laptop health, tell jokes - and I learn what you "
+    "tell me without being asked. Calendar: 'meetings today', 'add a meeting "
+    "with Sam at 3 pm', 'cancel design sync', 'import my calendar from "
+    "work.ics'. Fleet: 'status of all devices', 'run disk on web-01', "
+    "'watch web-01' (I'll alert you if it drops), 'screenshot my-mac' (what's "
+    "on its screen). Web and markets: 'what's the news', 'how much is 100 usd "
+    "in zar', 'eurusd', 'bitcoin price', 'markets', 'time in tokyo', and "
+    "'watch usdzar above 19' - a real alert fires the moment it crosses. "
+    "Prep: 'brief me', 'prep work', 'take care of work' (background, with a "
+    "report back). 'quiet for 30 minutes' and I'll actually stay quiet."
 )
 
 CHITCHAT_FALLBACK = (
@@ -61,6 +65,30 @@ RE_FILES   = (r"^(?:find|locate) (?:the |my )?(?:files?|documents?) "
 RE_CAL_LIST = (r"^(?:meetings?(?: today)?|what'?s on my calendar(?: today)?"
                r"|calendar(?: today)?|what am i doing(?: today| tomorrow)?"
                r"|next meeting|today'?s? plan)$")
+RE_NEWS   = (r"^(?:what'?s (?:the |happening in the )?news|headlines?|"
+             r"(?:world|tech|technology|market|markets|business|crypto|fx|forex) news|"
+             r"news(?: about| on| in)? (.+?))$")
+RE_READ   = r"^(?:read|summarize|summarise|what(?:'s| is) on|open) (https?://\S+)$"
+RE_FX_CONV = (r"^(?:how much is|convert) (\d+(?:[.,]\d+)?)\s*([a-z]{3})\s*"
+              r"(?:in|to|into)\s*([a-z]{3})\s*$|^(\d+(?:[.,]\d+)?)\s*([a-z]{3})\s*"
+              r"to\s*([a-z]{3})$")
+RE_FX_RATE = (r"^(?:what(?:'s| is) the )?([a-z]{3})/?([a-z]{3})(?: rate| price)?"
+              r"(?: right now| now| today)?\??$|"
+              r"^(?:forex|fx) (?:snapshot|update|report)$|"
+              r"^(?:how(?:'s| is) the )?(dollar|rand|euro|pound|yen)(?: doing)?$")
+RE_CRYPTO = (r"^(?:what(?:'s| is) the )?(bitcoin|btc|ethereum|eth|crypto|solana|sol)"
+             r"(?: price| rate)?(?: right now| now| today)?\??$")
+RE_MARKETS = (r"^(?:how are the markets?|markets?(?: (?:update|report|snapshot))?|"
+              r"what'?s happening in (?:the )?markets?|"
+              r"(?:sp500|s&p 500|nasdaq|dow|gold)(?: price| level)?)$")
+RE_RATE_WATCH = (r"^watch ([a-z]{3}/?[a-z]{3}|the rand|rand|bitcoin|btc|ethereum|eth|"
+                 r"gold)\s*(?:go(?:es|ing)? )?(below|above|under|over|crosses?|hits?|"
+                 r"drops to|breaks)\s*(\d+(?:[.,]\d+)?)$|"
+                 r"^alert me if ([a-z]{3}/?[a-z]{3}|the rand|rand|bitcoin|btc|"
+                 r"ethereum|eth|gold)\s*(?:goes|drops|falls|rises)?\s*"
+                 r"(below|above|under|over)\s*(\d+(?:[.,]\d+)?)$")
+RE_RATE_ALERTS = r"^(?:my )?rate alerts?$|^(?:clear|cancel) rate alerts$"
+RE_WORLDTIME = r"^what time is it in ([a-z\s]+?)\??$|^time in ([a-z\s]+?)\??$"
 RE_CAL_ADD = r"^add (?:a |an |my )?(meeting|call|appointment|deadline|task|event) (.+)$"
 RE_CAL_CANCEL = r"^cancel (?:the )?(?:meeting |call |appointment |deadline |task |event )?(.+)$"
 RE_CAL_IMPORT = r"^import (?:my )?(?:calendar|events|ics) from (\S+\.ics)$"
@@ -109,8 +137,14 @@ def _match(original: str, jarvis=None) -> Optional[Tuple[str, Dict]]:
     prep = getattr(jarvis, "prep", None) if jarvis else None
     routines = set(prep.routine_names()) if prep else set()
 
+    m = re.match(RE_WORLDTIME, t)
+    if m:
+        return ("worldtime", {"city": (m.group(1) or m.group(2)).strip()})
     if re.match(RE_TIME, t):
         return ("time", {})
+    m = re.search(r"https?://\S+", t)
+    if m and len(t) < 300:
+        return ("read", {"url": m.group(0)})
     if re.search(RE_DATE, t):
         return ("date", {})
     if re.search(RE_WEATHER, t):
@@ -192,6 +226,34 @@ def _match(original: str, jarvis=None) -> Optional[Tuple[str, Dict]]:
         return ("math", {"expr": m.group(1).strip()})
     if re.search(RE_JOKE, t):
         return ("joke", {})
+    m = re.match(RE_RATE_WATCH, t)
+    if m:
+        pair = m.group(1) or m.group(4)
+        op = m.group(2) or m.group(5)
+        level = m.group(3) or m.group(6)
+        return ("rate_watch", {"pair": pair, "op": op,
+                               "level": float(level.replace(",", "."))})
+    if re.match(RE_RATE_ALERTS, t):
+        return ("rate_alerts", {"clear": t.startswith(("clear", "cancel"))})
+    m = re.match(RE_FX_CONV, t)
+    if m:
+        amt = m.group(1) or m.group(4)
+        src = m.group(2) or m.group(5)
+        dst = m.group(3) or m.group(6)
+        return ("fx_conv", {"amount": float(amt.replace(",", ".")),
+                            "src": src, "dst": dst})
+    m = re.match(RE_CRYPTO, t)
+    if m:
+        return ("crypto", {"what": m.group(1)})
+    m = re.match(RE_FX_RATE, t)
+    if m:
+        return ("fx_rate", {"a": m.group(1) or m.group(3) or "",
+                            "b": m.group(2) or ""})
+    if re.match(RE_MARKETS, t):
+        return ("markets", {})
+    m = re.match(RE_NEWS, t)
+    if m:
+        return ("news", {"topic": (m.group(1) or "").strip()})
     if re.match(RE_FILES, t):
         return ("files", {"pattern": _extract(RE_FILES, orig)})
     if re.match(RE_STOP, t):
@@ -496,6 +558,130 @@ def rule_respond(text: str, cfg: dict, memory, jarvis=None) -> Tuple[str, str, s
 
     if intent == "joke":
         return (execute("joke", cfg=cfg)["result"]["joke"], "joke", "joke", "")
+
+    if intent == "worldtime":
+        r = execute("world_time", city=args["city"])
+        if not r["ok"]:
+            return (r["message"], "worldtime", "", args["city"])
+        w = r["result"]
+        return (f"It's {w['time']} on {w['day']} in {w['city']} ({w['relative']}).",
+                "worldtime", "world_time", args["city"])
+
+    if intent == "news":
+        r = execute("news", topic=args.get("topic") or "")
+        if not r["ok"]:
+            return (r["message"], "news", "news", args.get("topic", ""))
+        items = r["result"]["items"]
+        tag = " (offline demo feed)" if r["result"].get("simulated") else ""
+        bits = [f"{i + 1}) {it['title']}" for i, it in enumerate(items[:3])]
+        src = items[0].get("url") or ""
+        tail = f" — {src}" if src else ""
+        return ("Headlines" + tag + ": " + " · ".join(bits) + tail,
+                "news", "news", args.get("topic", ""))
+
+    if intent == "read":
+        r = execute("read_url", url=args["url"])
+        if not r["ok"]:
+            return (r["message"], "read", "read_url", args["url"])
+        res = r["result"]
+        head = (res["title"] + ": ") if res["title"] else ""
+        return (f"{head}{res['text'][:300]}"
+                + ("…" if res["chars"] > 300 else ""),
+                "read", "read_url", args["url"])
+
+    if intent == "fx_conv":
+        mkts = getattr(jarvis, "markets", None)
+        if mkts is None:
+            return ("The markets engine isn't wired up.", "fx_conv", "", "")
+        r = mkts.convert(args["amount"], args["src"], args["dst"])
+        if not r.get("ok"):
+            return (r["message"], "fx_conv", "convert_currency", "")
+        sim = " (simulated feed)" if r.get("simulated") else ""
+        return (f"{r['amount']:g} {r['src']} is {r['value']:,.2f} {r['dst']} "
+                f"at {r['rate']:g} per {r['src']}{sim}.",
+                "fx_conv", "convert_currency", f"{r['src']}{r['dst']}")
+
+    if intent in ("fx_rate", "crypto", "markets"):
+        mkts = getattr(jarvis, "markets", None)
+        if mkts is None:
+            return ("The markets engine isn't wired up.", intent, "", "")
+        snap = mkts.snapshot()
+        if not snap.get("ok"):
+            return (snap.get("message", "Markets are unreachable right now."),
+                    intent, "market_snapshot", "")
+        sim = " [simulated feed]" if snap.get("simulated") else ""
+        if intent == "crypto":
+            want = {"bitcoin": "BTCUSD", "btc": "BTCUSD", "ethereum": "ETHUSD",
+                    "eth": "ETHUSD", "crypto": "", "solana": "SOLUSD",
+                    "sol": "SOLUSD"}[args["what"]]
+            rows = snap.get("crypto") or {}
+            if want and want in rows:
+                row = rows[want]
+                return (f"{want} is at {row['price']:,.0f} USD "
+                        f"({row['chg_pct']:+.2f}% on the day){sim}.",
+                        "crypto", "market_snapshot", want)
+            if not want:
+                bits = ", ".join(f"{s} {r['price']:,.0f}" for s, r in rows.items())
+                return (f"Crypto board{sim}: {bits or 'nothing tracked'}.",
+                        "crypto", "market_snapshot", "")
+            return (f"I'm not tracking {want} — my crypto board: "
+                    + (", ".join(rows) or "empty") + ".",
+                    "crypto", "market_snapshot", want)
+        if intent == "fx_rate":
+            a, b = args["a"].lower(), args["b"].lower()
+            from .fx import _norm_pair
+            pair = _norm_pair(a + b) if b else _norm_pair(a)
+            if not pair:
+                return ("Which pair? Try 'eurusd', 'usdzar', or 'how much is "
+                        "100 usd in zar'.", "fx_rate", "", "")
+            row = (snap.get("pairs") or {}).get(pair)
+            if not row:
+                cr = mkts.convert(1, pair[:3], pair[3:])
+                if cr.get("ok"):
+                    return (f"{pair} is at {cr['rate']:g}{sim} (cross rate).",
+                            "fx_rate", "market_snapshot", pair)
+                return (f"I don't track {pair} — my board: "
+                        + ", ".join(snap.get("pairs") or {}) + ".",
+                        "fx_rate", "market_snapshot", pair)
+            return (f"{pair} is at {row['price']:g} ({row['chg_pct']:+.2f}% "
+                    f"on the day){sim}.", "fx_rate", "market_snapshot", pair)
+        bits = []
+        for sym, row in (snap.get("pairs") or {}).items():
+            bits.append(f"{sym} {row['price']:g} ({row['chg_pct']:+.1f}%)")
+        for sym, row in (snap.get("crypto") or {}).items():
+            bits.append(f"{sym} {row['price']:,.0f} ({row['chg_pct']:+.1f}%)")
+        for lab, row in (snap.get("indices") or {}).items():
+            bits.append(f"{lab} {row['price']:,.0f} ({row['chg_pct']:+.1f}%)")
+        return (f"Market snapshot{sim} [{snap.get('source', '')}]: "
+                + " · ".join(bits) + ".", "markets", "market_snapshot", "")
+
+    if intent == "rate_watch":
+        from .fx import _norm_pair
+        mkts = getattr(jarvis, "markets", None)
+        if mkts is None:
+            return ("The markets engine isn't wired up.", "rate_watch", "", "")
+        pair = _norm_pair(args["pair"])
+        if not pair:
+            return (f"I couldn't read that as a pair ('{args['pair']}'). "
+                    "Try 'watch usdzar above 19'.", "rate_watch", "", "")
+        op = "below" if args["op"] in ("below", "under", "drops to") else "above"
+        memory.add_rate_alert(pair, op, args["level"])
+        return (f"Watching {pair} — I'll flag it the moment it goes {op} "
+                f"{args['level']:g}. Say 'rate alerts' to review, "
+                "'clear rate alerts' to drop them.",
+                "rate_watch", "set_rate_alert", pair)
+
+    if intent == "rate_alerts":
+        if args.get("clear"):
+            n = memory.clear_rate_alerts()
+            return (f"Dropped {n} rate alert(s).", "rate_alerts", "", "")
+        rows = memory.rate_alerts(active_only=True)
+        if not rows:
+            return ("No rate alerts armed. Try 'watch usdzar above 19'.",
+                    "rate_alerts", "", "")
+        return ("Armed: " + "; ".join(f"{r['pair']} {r['op']} {r['threshold']:g}"
+                                      for r in rows) + ".",
+                "rate_alerts", "", "")
 
     if intent == "files":
         r = execute("find_files", cfg=cfg, pattern=args["pattern"])

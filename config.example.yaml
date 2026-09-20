@@ -37,6 +37,15 @@ jarvis:
     #   python -m jarvis.fleet.agent --name web-01 --url ws://<core>:8595 \
     #       --token <same> [--activity] [--allow shell:docker]
 
+  # ---- MARKETS: forex / crypto / indices + rate watchers ----
+  markets:
+    poll_minutes: 5          # how often providers are re-polled (cached between)
+    pairs: [EURUSD, GBPUSD, USDJPY, USDZAR]   # stooq symbols, 6 letters
+    crypto: [bitcoin, ethereum]               # coingecko ids
+    # indices: {"^spx": "S&P 500", "xauusd": "Gold"}   # optional override
+    # Providers (no keys needed): stooq -> frankfurter(ECB) -> open.er-api,
+    # crypto via coingecko. Offline + --demo falls back to a labelled sim feed.
+
   # ---- CALENDAR: meetings made real (autopilot + briefings + import) ----
   calendar:
     lead_minutes: 10    # how far before a meeting to start prepping

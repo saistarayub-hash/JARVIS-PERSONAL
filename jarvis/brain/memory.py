@@ -99,6 +99,15 @@ class Memory:
                     notes TEXT DEFAULT '',
                     created_at REAL
                 );
+                CREATE TABLE IF NOT EXISTS rate_alerts(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pair TEXT NOT NULL,
+                    op TEXT NOT NULL,
+                    threshold REAL NOT NULL,
+                    active INTEGER DEFAULT 1,
+                    created_at REAL,
+                    hit_at REAL
+                );
                 """
             )
             self.db.commit()
@@ -406,3 +415,36 @@ class Memory:
         with self._lock:
             row = self.db.execute("SELECT COUNT(*) FROM calendar").fetchone()
         return int(row[0])
+
+    # ---------- rate alerts ("watch the rand below 19") ----------
+    def add_rate_alert(self, pair: str, op: str, threshold: float) -> int:
+        with self._lock:
+            cur = self.db.execute(
+                "INSERT INTO rate_alerts(pair, op, threshold, active, created_at) "
+                "VALUES (?,?,?,?,?)", (pair, op, threshold, 1, time.time()))
+            self.db.commit()
+            return int(cur.lastrowid)
+
+    def rate_alerts(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        q = ("SELECT id, pair, op, threshold, active FROM rate_alerts "
+             + ("WHERE active = 1 " if active_only else "") + "ORDER BY id")
+        with self._lock:
+            rows = self.db.execute(q).fetchall()
+        return [dict(r) for r in rows]
+
+    def clear_rate_alerts(self, pair: str = "") -> int:
+        with self._lock:
+            if pair:
+                cur = self.db.execute(
+                    "DELETE FROM rate_alerts WHERE pair = ?", (pair,))
+            else:
+                cur = self.db.execute("DELETE FROM rate_alerts")
+            self.db.commit()
+        return cur.rowcount
+
+    def mark_rate_alert_hit(self, alert_id: int) -> None:
+        with self._lock:
+            self.db.execute(
+                "UPDATE rate_alerts SET active = 0, hit_at = ? WHERE id = ?",
+                (time.time(), alert_id))
+            self.db.commit()

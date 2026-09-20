@@ -27,6 +27,9 @@ from .learner import Learner
 from .tools.fleet import set_hub as set_fleet_hub
 from .tools.fleet import set_prep as set_prep_tool
 from .tools.memory_tools import set_memory
+from .tools.market_tools import set_markets
+from .tools import web as web_tools
+from .brain.fx import Markets
 
 log = logging.getLogger("jarvis")
 
@@ -42,6 +45,10 @@ class Jarvis:
         root = cfg.get("root") or "."
         self.memory = Memory(os.path.join(root, cfg["memory"]["db"]))
         set_memory(self.memory)
+        self.demo = bool(cfg.get("demo", False))
+        web_tools.set_demo(self.demo)
+        self.markets = Markets(cfg, demo=self.demo)
+        set_markets(self.markets)
         self.learner = Learner(self.memory, cfg["learner"])
         provider = (cfg["llm"].get("provider") or "auto").lower()
         self.brain = LLMBrain(cfg) if provider != "none" else None
@@ -94,6 +101,8 @@ class Jarvis:
         p["preps"] = self.prep.due_preps() if self.prep else []
         now_ts = time.time()
         p["calendar"] = self.memory.calendar_events(now_ts - 3600, now_ts + 86400)
+        snap = self.markets.snapshot()
+        p["markets"] = snap if snap.get("ok") else None
         return p
 
     def attach(self, ws) -> None:
@@ -196,6 +205,36 @@ class Jarvis:
                      f"({count} times). Want me to save that as routine "
                      f"'{name}'?"),
         })
+
+    # ================= markets / rate watchers =================
+    def maybe_rate_alerts(self) -> None:
+        """Fire any 'watch EURUSD below 1.05'-style alerts that have crossed."""
+        if self._quiet():
+            return
+        alerts = self.memory.rate_alerts(active_only=True)
+        if not alerts:
+            return
+        snap = self.markets.snapshot()
+        if not snap.get("ok"):
+            return
+        prices = {}
+        for bucket in ("pairs", "crypto", "indices"):
+            for sym, row in (snap.get(bucket) or {}).items():
+                prices[sym] = row["price"]
+        for a in alerts:
+            px = prices.get(a["pair"])
+            if px is None:
+                continue
+            hit = px <= a["threshold"] if a["op"] == "below" else px >= a["threshold"]
+            if not hit:
+                continue
+            self.memory.mark_rate_alert_hit(a["id"])
+            text = (f"{a['pair']} just crossed {a['op']} {a['threshold']:g} — "
+                    f"it's at {px:g} now.")
+            if snap.get("simulated"):
+                text += " (simulated feed)"
+            self.broadcast({"type": "alert", "text": text})
+            self.broadcast({"type": "announce", "text": "Rate alert, sir: " + text})
 
     # ================= calendar / meeting autopilot =================
     def maybe_meeting_prep(self) -> None:
@@ -573,6 +612,24 @@ class Jarvis:
                 lines.append("Routines ready: " + ", ".join(routines)
                              + ". Say 'prep " + routines[0] + "' to fire one, "
                              "or 'take care of " + routines[0] + "' and I'll handle it.")
+        snap = self.markets.snapshot()
+        if snap.get("ok"):
+            bits = []
+            for sym, row in list((snap.get("pairs") or {}).items())[:3]:
+                bits.append(f"{sym} {row['price']:g} ({row['chg_pct']:+.1f}%)")
+            for sym, row in list((snap.get("crypto") or {}).items())[:1]:
+                bits.append(f"{sym} {row['price']:,.0f}")
+            tag = " [sim feed]" if snap.get("simulated") else ""
+            if bits:
+                lines.append("Markets" + tag + ": " + ", ".join(bits) + ".")
+        try:
+            from .tools.web import news as _news_tool
+            items = _news_tool()["items"]
+            if items:
+                top = items[0]["title"]
+                lines.append(f"Top headline: {top}.")
+        except Exception:  # noqa: BLE001 — news is optional garnish
+            pass
         facts = self.memory.facts(2)
         if facts:
             lines.append("On file: " + "; ".join(f["text"] for f in facts) + ".")
@@ -690,6 +747,16 @@ class Jarvis:
             lines.append(f"Calendar — next: {nxt['title']} at {t_label}{loc}. "
                          "Use calendar_today / calendar_add / calendar_cancel "
                          "for the rest of the day.")
+        snap = self.markets.snapshot()
+        if snap.get("ok"):
+            bits = [f"{s} {r['price']:g}" for s, r in
+                    list((snap.get("pairs") or {}).items())[:4]]
+            bits += [f"{s} {r['price']:,.0f}" for s, r in
+                     list((snap.get("crypto") or {}).items())[:2]]
+            sim = " (SIMULATED demo feed — say so if asked)" \
+                if snap.get("simulated") else ""
+            lines.append("Markets now" + sim + ": " + ", ".join(bits) + ". "
+                         "Tools: market_snapshot, convert_currency, set_rate_alert.")
         if self._quiet():
             lines.append("Quiet mode is ON — no proactive suggestions.")
         return "\n\n".join(lines)

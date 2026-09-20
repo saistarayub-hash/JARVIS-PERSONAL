@@ -41,6 +41,7 @@ def main() -> None:
 
     cfg = load_config(args.config)
     cfg["root"] = os.getcwd()
+    cfg["demo"] = bool(args.demo)
     if args.no_voice:
         cfg["voice"]["enabled"] = False
 

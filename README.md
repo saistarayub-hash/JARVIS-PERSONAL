@@ -36,6 +36,19 @@ sees what you're doing across all your machines, and gets itself ready
 - 📸 **Screen capture** — "screenshot my-mac" grabs the actual screen on any
   agent (macOS/Linux/Windows) and pops it up in the UI — "what's on my screen?"
   is no longer a figure of speech.
+- 🌐 **Real web access** — paste any URL and JARVIS reads it ("read
+  https://…", or just drop the link in chat): title + readable text, no
+  headless browser, no keys.
+- 📰 **News** — "what's the news", "tech news", "news about markets": DuckDuckGo
+  News first, then RSS fallbacks (BBC / Al Jazeera / NYT), cached 15 min; the
+  top headline rides along in every brief.
+- 💱 **Forex & markets** — "how much is 100 usd in zar", "eurusd", "bitcoin
+  price", "markets": live pairs (Stooq intraday), ECB/open.er-api daily
+  fallback, crypto via CoinGecko, indices & gold; the Command Center shows a
+  live board. **Rate watchers**: "watch usdzar above 19" arms a real alert —
+  the moment the pair crosses, you get a red banner and a spoken flag.
+  No API keys anywhere; offline + `--demo` uses a clearly labelled sim feed.
+- 🕰 **World clock** — "time in tokyo" (session planning across zones).
 - ✨ **Hologram UI** — animated ring + **Command Center** panel: fleet health,
   today's activity, preps, memories, habits.
 
@@ -60,6 +73,11 @@ i love coffee         ← auto-learned, no "remember" needed
 i have a meeting with Priya at 4 pm   ← lands on the calendar, autoprepped
 meetings today
 screenshot web-01     ← its actual screen, popped up in the UI
+what's the news       ← headlines; top one joins every brief
+https://example.com   ← paste a link and I read it for you
+how much is 100 usd in zar
+watch usdzar above 19 ← real alert the moment it crosses
+markets               ← pairs, crypto, indices board
 take care of work     ← background routine, reports back
 watch web-01          ← I'll alert you if it drops
 quiet for 30 minutes

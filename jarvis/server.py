@@ -32,8 +32,13 @@ def create_app(cfg: dict) -> FastAPI:
                     jarvis.maybe_proactive()
                     jarvis.maybe_preps()
                     jarvis.maybe_meeting_prep()
+                    jarvis.maybe_rate_alerts()
                     if tick % 5 == 0:  # sequence-learner every ~5 min
                         jarvis.maybe_sequence_suggestion()
+                    if tick % 5 == 2:  # push fresh markets to open UIs
+                        snap = jarvis.markets.snapshot(force=True)
+                        if snap.get("ok"):
+                            jarvis.broadcast({"type": "markets", **snap})
                 except Exception:
                     pass
 
@@ -55,6 +60,11 @@ def create_app(cfg: dict) -> FastAPI:
     @app.get("/api/state")
     async def _state():
         return jarvis.state()
+
+    @app.get("/api/markets")
+    async def _markets():
+        snap = jarvis.markets.snapshot()
+        return snap
 
     @app.get("/api/calendar")
     async def _calendar():
