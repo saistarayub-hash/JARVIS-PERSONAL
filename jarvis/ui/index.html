@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>J.A.R.V.I.S.</title>
+<link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+<div id="suggestion" class="hidden">
+  <span id="suggestion-text"></span>
+  <button id="suggestion-do" class="ghost">DO IT</button>
+  <button id="suggestion-no" class="ghost">LATER</button>
+</div>
+<div id="prep-banner" class="hidden">
+  <span id="prep-text"></span>
+  <button id="prep-do" class="ghost amber">PREP IT</button>
+  <button id="prep-later" class="ghost">LATER</button>
+</div>
+<div id="alert-banner" class="hidden">
+  <span id="alert-text"></span>
+  <button id="alert-check" class="ghost red">CHECK IT</button>
+  <button id="alert-dismiss" class="ghost">DISMISS</button>
+</div>
+<div id="offer-banner" class="hidden">
+  <span id="offer-text"></span>
+  <button id="offer-save" class="ghost blue">SAVE IT</button>
+  <button id="offer-nope" class="ghost">NOPE</button>
+</div>
+
+<header>
+  <h1>J.A.R.V.I.S.</h1>
+  <div id="chips">
+    <span id="chip-mode" class="chip">CONNECTING</span>
+    <span id="chip-brain" class="chip">…</span>
+    <span id="chip-fleet" class="chip hidden">FLEET 0</span>
+  </div>
+</header>
+
+<main>
+  <section id="stage">
+    <canvas id="ring" width="560" height="560"></canvas>
+    <div id="status" class="status idle">STANDBY</div>
+    <div id="transcript">
+      <div id="user-line"></div>
+      <div id="reply-line">Systems online. Try "brief me", "status of all devices", or "open spotify" twice and watch me learn it.</div>
+    </div>
+  </section>
+
+  <aside id="panel" class="hidden">
+    <h2>COMMAND CENTER</h2>
+    <p class="sub">Everything I know: your memories, your habits, what you've
+    been doing, and the state of every device I can reach.</p>
+
+    <h3>Fleet</h3>
+    <ul id="fleet"><li class="empty">No devices connected.</li></ul>
+
+    <h3>Today</h3>
+    <ul id="calendar"><li class="empty">Calendar is clear.</li></ul>
+
+    <h3>Today's activity</h3>
+    <ul id="activity"><li class="empty">No sessions yet.</li></ul>
+
+    <h3>Prep</h3>
+    <ul id="preps"><li class="empty">I'll get ahead of things as I learn your rhythm.</li></ul>
+
+    <h3>Memories</h3>
+    <ul id="facts"><li class="empty">Nothing filed yet.</li></ul>
+
+    <h3>Habits</h3>
+    <ul id="habits"><li class="empty">No patterns yet — use me a few times.</li></ul>
+
+    <button id="clear-facts" class="ghost small">CLEAR MEMORIES</button>
+  </aside>
+</main>
+
+<footer>
+  <button id="toggle-panel" class="ghost">COMMAND CENTER</button>
+  <form id="chat-form">
+    <input id="chat-input" placeholder='Try: "meetings today" · "add a meeting with Sam at 3 pm" · "screenshot web-01" · "brief me" · "take care of work"' autocomplete="off" spellcheck="false"/>
+    <button id="brief" type="button" title="Ask for the all-purpose brief">BRIEF</button>
+    <button id="send" type="submit">SEND</button>
+    <button id="mic" type="button" title="Push-to-talk (needs voice stack on server)">MIC</button>
+  </form>
+</footer>
+
+<div id="shot-overlay" class="hidden">
+  <div id="shot-box">
+    <div id="shot-caption"></div>
+    <img id="shot-img" alt="device screenshot"/>
+    <button id="shot-close" class="ghost">CLOSE</button>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

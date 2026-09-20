@@ -1,0 +1,74 @@
+# JARVIS configuration — copy this file to config.yaml and edit.
+# Everything here is optional; missing keys use sensible defaults.
+jarvis:
+  user:
+    name: Boss            # what JARVIS calls you
+    default_city: London  # used for "weather" when you don't name a city
+
+  voice:
+    enabled: false        # true = wake word + mic + spoken replies
+                          # (needs: pip install -r requirements-voice.txt)
+    wake_word: hey jarvis
+    stt: faster-whisper
+    stt_model: base.en    # tiny.en | base.en | small.en (bigger = slower, better)
+    tts: piper            # piper | espeak | pyttsx3
+    piper_voice: en_GB-alan-medium
+    piper_model_dir: data/voices
+
+  llm:
+    provider: auto        # auto | openai | ollama | none
+    # OpenAI-compatible API (OpenAI, Groq, LM Studio, vLLM...)
+    openai_model: gpt-4o-mini
+    openai_base_url: https://api.openai.com/v1
+    openai_api_key_env: OPENAI_API_KEY   # name of the env var holding your key
+    # Local LLM via Ollama (no cloud at all)
+    ollama_base_url: http://localhost:11434/v1
+    ollama_model: llama3.2
+    temperature: 0.6
+    max_tokens: 300
+
+  # ---- FLEET: laptops, servers, phones — one JARVIS over all of them ----
+  fleet:
+    enabled: true
+    token: change-me-to-a-long-random-string   # shared secret; agents must match
+    auto_watch: true      # keep an eye on every device (alert on drop, announce on return)
+    timeout_s: 10
+    # On each device run:
+    #   python -m jarvis.fleet.agent --name web-01 --url ws://<core>:8595 \
+    #       --token <same> [--activity] [--allow shell:docker]
+
+  # ---- CALENDAR: meetings made real (autopilot + briefings + import) ----
+  calendar:
+    lead_minutes: 10    # how far before a meeting to start prepping
+    # Import your real calendar any time: "import my calendar from work.ics"
+    # (export .ics from Google/Outlook/Apple Calendar) or via the LLM brain.
+
+  # ---- PREP: JARVIS getting itself ready before you ask ----
+  prep:
+    enabled: true
+    mode: auto            # auto = fire due preps itself and announce them;
+                          # ask  = banner "Shall I prep ...?" first
+    lead_minutes: 5       # how far ahead of a learned time to offer the prep
+    catchup_minutes: 15   # how long after the time to still offer it
+    min_habit_weight: 1.8 # how strong a habit must be before auto-prep
+    routines:
+      morning:            # scheduled: fires at 08:30 on weekdays
+        at: "08:30"
+        weekdays: [mon, tue, wed, thu, fri]
+        actions: ["weather", "brief me"]
+      work:               # on-demand: "prep work"
+        actions: ["open vscode", "open terminal", "open slack"]
+      movie-night:
+        actions: ["open youtube", "volume 30"]
+
+  learner:
+    proactive: true       # JARVIS suggests things based on learned habits
+    min_uses: 2           # how many times before something counts as a habit
+    window_hours: 1       # how close "now" must be to a learned time slot
+
+  web:
+    host: 127.0.0.1
+    port: 8595
+
+  memory:
+    db: data/memory.db
