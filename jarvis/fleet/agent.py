@@ -283,6 +283,41 @@ def exec_action(action: str, args: dict, allow: list,
         if "screenshot" not in allow:
             return {"ok": False, "message": "not allowed on this agent"}
         return _screenshot()
+    if action == "sms":
+        if "sms" not in allow:
+            return {"ok": False, "message": "not allowed on this device"}
+        if not shutil.which("termux-sms-send"):
+            return {"ok": False,
+                    "message": ("needs Termux:API on this Android device "
+                                "(pkg install termux-api)")}
+        to, text = str(args.get("to", "")), str(args.get("text", ""))
+        if not to or not text:
+            return {"ok": False, "message": "sms needs 'to' and 'text'"}
+        try:
+            subprocess.run(["termux-sms-send", "-n", to, text],
+                           timeout=20, check=True)
+            return {"ok": True, "data": {"sent_to": to}}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "message": f"sms failed: {exc}"}
+    if action == "call":
+        if "call" not in allow:
+            return {"ok": False, "message": "not allowed on this device"}
+        num = str(args.get("number", ""))
+        if not num:
+            return {"ok": False, "message": "call needs 'number'"}
+        if shutil.which("termux-telephony-call"):
+            try:
+                subprocess.run(["termux-telephony-call", num],
+                               timeout=20, check=True)
+                return {"ok": True, "data": {"calling": num}}
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "message": f"call failed: {exc}"}
+        try:  # desktop fallback: tel: URI
+            import webbrowser
+            webbrowser.open(f"tel:{num}")
+            return {"ok": True, "data": {"calling": num}}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "message": f"call failed: {exc}"}
     if action == "shell":
         prefixes = [p[len("shell:"):] for p in allow if p.startswith("shell:")]
         cmd = (args.get("cmd") or "").strip()

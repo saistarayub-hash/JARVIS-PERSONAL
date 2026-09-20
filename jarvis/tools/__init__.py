@@ -50,4 +50,4 @@ def specs() -> list:
 
 
 from . import (system, apps, web, files, memory_tools,  # noqa: E402,F401
-               calendar_tools, market_tools)
+               calendar_tools, market_tools, bridge_tools)

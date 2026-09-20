@@ -139,6 +139,54 @@ function renderLearned(facts, habits) {
     habitsEl.appendChild(li);
   });
 }
+function renderHome(st) {
+  const el = $("#home"), chip = $("#home-src");
+  if (!st || !st.ok) {
+    el.innerHTML = '<li class="empty">No home bridge.</li>';
+    return;
+  }
+  chip.classList.remove("hidden");
+  chip.textContent = st.simulated ? "SIM HOME" : "HOME ASSISTANT";
+  chip.className = "chip tiny" + (st.simulated ? " amber" : " green");
+  el.innerHTML = "";
+  Object.entries(st.lights || {}).forEach(([n, l]) => {
+    const li = document.createElement("li");
+    li.className = "mkt";
+    li.innerHTML = `<span class="sym">${l.on ? "💡" : "·"} ${n}</span>`
+      + `<span class="px">${l.on ? (l.brightness ? l.brightness + "%" : "on") : "off"}</span>`;
+    el.appendChild(li);
+  });
+  const tv = document.createElement("li");
+  tv.className = "mkt";
+  tv.innerHTML = `<span class="sym">📺 tv</span><span class="px">${st.tv.on ? "on" : "off"}</span>`;
+  el.appendChild(tv);
+  const cl = document.createElement("li");
+  cl.className = "mkt";
+  cl.innerHTML = `<span class="sym">🌡 climate</span><span class="px">${st.climate.target}°C</span>`;
+  el.appendChild(cl);
+}
+function renderScenes(scenes) {
+  const box = $("#scenes");
+  box.innerHTML = "";
+  (scenes || []).forEach((s) => {
+    const b = document.createElement("button");
+    b.className = "ghost small scene-btn";
+    b.textContent = s.replace(/-/g, " ").toUpperCase();
+    b.onclick = () => sendChat(s.replace(/-/g, " "));
+    box.appendChild(b);
+  });
+}
+function renderMusic(m) {
+  const el = $("#music");
+  if (!m || !m.ok || !m.playing) {
+    el.className = "empty";
+    el.textContent = "Nothing playing.";
+    return;
+  }
+  el.className = "";
+  el.textContent = `▶ ${m.track || "music"}  ·  vol ${m.volume}%`
+    + (m.simulated ? "  (sim)" : "");
+}
 function renderMarkets(snap) {
   const el = $("#markets"), chip = $("#mkt-src");
   if (!snap || !snap.ok) {
@@ -350,8 +398,13 @@ function handle(m) {
       renderActivity(m.activity || []);
       renderPreps(m.preps || []);
       renderMarkets(m.markets);
+      renderHome(m.home);
+      renderMusic(m.music);
+      renderScenes(m.scenes || []);
       break;
     case "markets": renderMarkets(m); break;
+    case "home": renderHome(m); break;
+    case "music": renderMusic(m); break;
     case "state": setState(m.state); break;
     case "level": currentLevel = m.value; break;
     case "user": userLine.textContent = m.text; break;

@@ -108,6 +108,12 @@ class Memory:
                     created_at REAL,
                     hit_at REAL
                 );
+                CREATE TABLE IF NOT EXISTS convo(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    ts REAL
+                );
                 """
             )
             self.db.commit()
@@ -448,3 +454,22 @@ class Memory:
                 "UPDATE rate_alerts SET active = 0, hit_at = ? WHERE id = ?",
                 (time.time(), alert_id))
             self.db.commit()
+
+    # ---------- conversation memory (LLM continuity across restarts) ----------
+    def log_convo(self, role: str, text: str, keep: int = 400) -> None:
+        with self._lock:
+            self.db.execute(
+                "INSERT INTO convo(role, text, ts) VALUES (?,?,?)",
+                (role, (text or "")[:1200], time.time()))
+            self.db.execute(
+                "DELETE FROM convo WHERE id NOT IN "
+                "(SELECT id FROM convo ORDER BY id DESC LIMIT ?)", (keep,))
+            self.db.commit()
+
+    def convo_tail(self, n: int = 12, max_age_h: float = 24) -> List[Dict[str, Any]]:
+        since = time.time() - max_age_h * 3600
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT role, text FROM convo WHERE ts >= ? "
+                "ORDER BY id DESC LIMIT ?", (since, n)).fetchall()
+        return [{"role": r["role"], "content": r["text"]} for r in reversed(rows)]

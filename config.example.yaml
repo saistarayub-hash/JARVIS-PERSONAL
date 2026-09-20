@@ -37,6 +37,12 @@ jarvis:
     #   python -m jarvis.fleet.agent --name web-01 --url ws://<core>:8595 \
     #       --token <same> [--activity] [--allow shell:docker]
 
+  # ---- SMART HOME: Home Assistant when configured, labelled sim otherwise --
+  # home_assistant:
+  #   url: http://homeassistant.local:8123
+  #   token: eyJ0eXAi...            # long-lived access token
+  # Entities used: light.<name>, media_player.tv, climate.home
+
   # ---- MARKETS: forex / crypto / indices + rate watchers ----
   markets:
     poll_minutes: 5          # how often providers are re-polled (cached between)
@@ -67,8 +73,15 @@ jarvis:
         actions: ["weather", "brief me"]
       work:               # on-demand: "prep work"
         actions: ["open vscode", "open terminal", "open slack"]
+      # scenes: routines you fire by name — "good morning", "movie night",
+      # "good night". Actions can be anything JARVIS understands, including
+      # home ("lights off all", "tv on"), music ("play focus music") and briefs.
+      good-morning:
+        actions: ["brief me", "lights on kitchen", "play focus music"]
       movie-night:
-        actions: ["open youtube", "volume 30"]
+        actions: ["lights off all", "tv on", "play movie night", "volume 30"]
+      good-night:
+        actions: ["lights off all", "tv off", "pause the music"]
 
   learner:
     proactive: true       # JARVIS suggests things based on learned habits

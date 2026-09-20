@@ -61,6 +61,22 @@ class SimAgent(threading.Thread):
             return {"ok": True, "data": {"opened": args.get("name", "")}}
         if a == "screenshot":
             return self._fake_screen()
+        if a == "sms":
+            return {"ok": True,
+                    "data": {"sent_to": args.get("to", ""),
+                             "note": "simulated delivery"}}
+        if a == "call":
+            return {"ok": True,
+                    "data": {"calling": args.get("number", ""),
+                             "note": "simulated call"}}
+        if a == "sms":
+            return {"ok": True,
+                    "data": {"sent_to": args.get("to", ""),
+                             "via": "sim termux-sms-send"}}
+        if a == "call":
+            return {"ok": True,
+                    "data": {"calling": args.get("number", ""),
+                             "via": "sim termux-telephony-call"}}
         if a == "notify":
             return {"ok": True, "data": {"notified": args.get("text", "")}}
         if a == "shell":

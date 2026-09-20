@@ -49,6 +49,24 @@ sees what you're doing across all your machines, and gets itself ready
   the moment the pair crosses, you get a red banner and a spoken flag.
   No API keys anywhere; offline + `--demo` uses a clearly labelled sim feed.
 - 🕰 **World clock** — "time in tokyo" (session planning across zones).
+- 🧠 **LLM-ready by construction** — plug any OpenAI-compatible endpoint into
+  `llm:` and it inherits *everything*: an auto-generated capability manifest
+  (every tool, grouped: laptop / memory / calendar / markets / home / music /
+  scenes / fleet), persistent conversation memory across restarts, 6-round
+  agentic tool chaining, and a vision path (`analyze_screen`, "what am I
+  looking at?") that sends the captured PNG to the model.
+- 🏠 **Smart home** — Home Assistant REST bridge when configured
+  (`home_assistant: url + token`), labelled sim house otherwise: "lights on
+  kitchen", "dim desk to 40", "tv off", "set temperature to 22".
+- 🎵 **Music** — real MPRIS control via `playerctl` (Spotify/VLC/browser),
+  `play <query>` opens a Spotify search when nothing is playing; sim player
+  offline. "pause", "next track", "what's playing".
+- 🎬 **Scenes** — "good morning", "movie night", "good night": whole routines
+  of home+music+brief actions run in the background with step reports.
+  Scene buttons appear in the Command Center.
+- 📱 **Phone superpowers** — the Android agent (Termux) can really send SMS
+  (`termux-sms-send`) and place calls (`termux-telephony-call`) when started
+  with `--allow sms --allow call`: "text Sam I'm running late", "call mom".
 - ✨ **Hologram UI** — animated ring + **Command Center** panel: fleet health,
   today's activity, preps, memories, habits.
 
@@ -69,6 +87,11 @@ Open http://127.0.0.1:8595 and try:
 brief me
 status of all devices
 open spotify          ← say it twice, then check the LEARNED panel
+good morning          ← scene: brief + kitchen lights + focus music
+lights off all        ← smart home (Home Assistant, or labelled sim)
+play focus music      ← real MPRIS control when a player is running
+text sam: on my way   ← real SMS from your Termux phone agent
+what am i looking at  ← screen capture + vision model when connected
 i love coffee         ← auto-learned, no "remember" needed
 i have a meeting with Priya at 4 pm   ← lands on the calendar, autoprepped
 meetings today
@@ -97,6 +120,11 @@ Every machine runs the same lightweight agent — it only ever makes an
 pip install psutil websockets
 python -m jarvis.fleet.agent --name web-01 --url ws://192.168.1.10:8595 \
     --token <your fleet token> --allow shell:docker --allow shell:git
+
+# an Android phone in Termux (SMS + calls + notifications, when YOU allow it):
+#   pkg install python termux-api
+python -m jarvis.fleet.agent --name phone --url ws://192.168.1.10:8595 \
+    --token <your fleet token> --allow sms --allow call
 
 # your laptop (adds foreground-app awareness):
 python -m jarvis.fleet.agent --name my-mac --url ws://192.168.1.10:8595 \
@@ -200,6 +228,9 @@ jarvis/
 │   ├── memory.py           # SQLite: facts, events, habits, activity,
 │   │                       #   devices, routines, watchers, calendar
 │   ├── ics.py              # dependency-free ICS import
+│   ├── fx.py               # markets engine: stooq/ECB/er-api/coingecko + sim
+│   ├── home.py             # smart-home bridge: Home Assistant REST or sim
+│   ├── music.py            # music bridge: playerctl (MPRIS) or sim
 │   └── prep.py             # PREP ENGINE: routines + habit-based getting-ready
 ├── learner/patterns.py     # usage log → proactive suggestions
 ├── fleet/
@@ -210,7 +241,11 @@ jarvis/
 │   │                       #   find_files, set_volume, system_stats, math,
 │   │                       #   remember_fact, recall_facts, fleet_status,
 │   │                       #   device_info, run_remote, fire_routine,
-│   │                       #   calendar_today, calendar_add, calendar_cancel
+│   │                       #   calendar_today, calendar_add, calendar_cancel,
+│   │                       #   market_snapshot, convert_currency, set_rate_alert,
+│   │                       #   home_light, home_tv, home_climate, home_state,
+│   │                       #   music_control, run_scene, send_sms, place_call,
+│   │                       #   analyze_screen, read_url, news, world_time
 ├── voice/                  # lazy: openWakeWord wake, Whisper STT, Piper TTS
 └── ui/                     # hologram + Command Center (fleet/activity/prep)
 data/memory.db              # your memories (created at runtime, git-ignored)

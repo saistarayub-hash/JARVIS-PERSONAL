@@ -89,6 +89,30 @@ RE_RATE_WATCH = (r"^watch ([a-z]{3}/?[a-z]{3}|the rand|rand|bitcoin|btc|ethereum
                  r"(below|above|under|over)\s*(\d+(?:[.,]\d+)?)$")
 RE_RATE_ALERTS = r"^(?:my )?rate alerts?$|^(?:clear|cancel) rate alerts$"
 RE_WORLDTIME = r"^what time is it in ([a-z\s]+?)\??$|^time in ([a-z\s]+?)\??$"
+RE_LIGHTS = (r"^(?:(?:turn|switch|put) )?(?:the )?(lights?|lamps?) (on|off)"
+             r"(?: (?:in |in the |the )?([a-z ]+))?$|"
+             r"^(?:turn|switch) (on|off) (?:the )?([a-z ]+?) (?:lights?|lamps?)$")
+RE_DIM = (r"^(?:dim|set|brighten) (?:the )?([a-z ]+?)"
+          r"(?: (?:lights?|lamps?))?(?: to| at) (\d{1,3})"
+          r"(?: ?per ?cent| ?%| percent)?$")
+RE_TV = (r"^(?:(?:turn|switch|put) )?(?:the )?tv (on|off)$|"
+         r"^(?:turn|switch) (on|off) (?:the )?tv$")
+RE_CLIMATE = (r"^(?:set|make|put) (?:the )?(?:temperature|thermostat|heat|"
+              r"heating|ac|a\/c|cooling) (?:to )?(\d{1,2})"
+              r"(?: ?degrees?| ?°c?| ?c)?$|"
+              r"^set (?:it|the house|the flat) to (\d{1,2})"
+              r"(?: ?degrees?| ?°c?| ?c)?$")
+RE_MUSIC_OPS = (r"^(pause(?: the music)?|resume(?: the music)?|next track|"
+                r"next song|skip(?: this)?(?: track| song)?|what'?s playing"
+                r"(?: right now)?|music status)$")
+RE_SCENE = (r"^(good morning|goodnight|good night|movie night|"
+            r"start (?:the )?movie night|bedtime|wake up scene)$")
+RE_SMS = (r"^(?:text|sms|message) ([a-z0-9 _\-]+?)"
+          r"(?::| saying| that| to say)? (.+)$")
+RE_CALL = r"^(?:call|phone|ring|dial) ([a-z0-9 _\-]+?)(?: please)?$"
+RE_SEE = (r"^(?:what do you see|look at my screen|what am i looking at|"
+          r"what'?s on (?:my|the) screen(?: of ([a-z0-9_\-\.]+))?|"
+          r"describe (?:my|the) screen(?: on ([a-z0-9_\-\.]+))?)$")
 RE_CAL_ADD = r"^add (?:a |an |my )?(meeting|call|appointment|deadline|task|event) (.+)$"
 RE_CAL_CANCEL = r"^cancel (?:the )?(?:meeting |call |appointment |deadline |task |event )?(.+)$"
 RE_CAL_IMPORT = r"^import (?:my )?(?:calendar|events|ics) from (\S+\.ics)$"
@@ -209,6 +233,41 @@ def _match(original: str, jarvis=None) -> Optional[Tuple[str, Dict]]:
         return ("prep", {"name": m.group(1)})
     if re.search(RE_SUGGEST, t):
         return ("suggestions", {})
+    m = re.match(RE_SEE, t)
+    if m:
+        return ("see", {"device": (m.group(1) or m.group(2) or "").strip()})
+    m = re.match(RE_SCENE, t)
+    if m:
+        return ("scene", {"name": m.group(1)})
+    m = re.match(RE_SMS, t)
+    if m:
+        return ("sms", {"who": m.group(1).strip(), "text": m.group(2).strip()})
+    m = re.match(RE_CALL, t)
+    if m:
+        return ("call", {"who": m.group(1).strip()})
+    m = re.match(RE_CLIMATE, t)
+    if m:
+        return ("climate", {"target": int(m.group(1) or m.group(2))})
+    m = re.match(RE_DIM, t)
+    if m:
+        return ("dim", {"name": m.group(1).strip(), "level": int(m.group(2))})
+    m = re.match(RE_LIGHTS, t)
+    if m:
+        if m.group(1):
+            on = m.group(2) == "on"
+            name = (m.group(3) or "all").strip()
+        else:
+            on = m.group(4) == "on"
+            name = (m.group(5) or "all").strip()
+        if name in ("all", "all lights", "house", "flat"):
+            name = "all"
+        return ("lights", {"name": name, "on": on})
+    m = re.match(RE_TV, t)
+    if m:
+        return ("tv", {"on": (m.group(1) or m.group(2)) == "on"})
+    m = re.match(RE_MUSIC_OPS, t)
+    if m:
+        return ("music_ops", {"op": m.group(1)})
     if re.match(RE_PLAY, t):
         return ("play", {"q": _extract(RE_PLAY, orig)})
     if "volume up" in t:
@@ -524,12 +583,133 @@ def rule_respond(text: str, cfg: dict, memory, jarvis=None) -> Tuple[str, str, s
                 "me — the more you lean on me, the sharper it gets.", "suggestions", "", "")
 
     if intent == "play":
-        r = execute("open_app", cfg=cfg, name="spotify")
-        if r["ok"]:
-            return (f"Opening Spotify. I'd queue '{args['q']}' for you, but I don't drive "
-                    "the player yet — one tap on your end.", "play", "open_app", args["q"])
-        return ("I'd open Spotify for that, but it's not installed (or I can't find it) "
-                "on this machine.", "play", "open_app", args["q"])
+        music = getattr(jarvis, "music", None)
+        if music is None:
+            return ("The music bridge isn't wired up.", "play", "", args["q"])
+        r = music.play(args["q"])
+        sim = " (sim player)" if r.get("simulated") else ""
+        note = f" — {r['note']}" if r.get("note") else ""
+        return (f"Playing {r.get('playing') or args['q']}{sim}{note}.",
+                "play", "music_control", args["q"])
+
+    if intent == "music_ops":
+        music = getattr(jarvis, "music", None)
+        if music is None:
+            return ("The music bridge isn't wired up.", "music_ops", "", "")
+        op = args["op"]
+        if op.startswith("pause"):
+            music.pause()
+            return ("Paused.", "music_ops", "music_control", "pause")
+        if op.startswith("resume"):
+            r = music.play()
+            return (f"Resumed {r.get('playing') or 'the playlist'}.",
+                    "music_ops", "music_control", "play")
+        if op in ("next track", "next song") or op.startswith("skip"):
+            r = music.next()
+            return (f"Skipped to {r.get('playing') or 'the next track'}.",
+                    "music_ops", "music_control", "next")
+        st = music.status()
+        if st.get("playing"):
+            return (f"This is {st.get('track')} ({st.get('source')}).",
+                    "music_ops", "music_control", "status")
+        return ("Nothing's playing right now — say 'play something'.",
+                "music_ops", "music_control", "status")
+
+    if intent == "lights":
+        home = getattr(jarvis, "home", None)
+        if home is None:
+            return ("The home bridge isn't wired up.", "lights", "", "")
+        r = home.light(args["name"], args["on"])
+        if not r.get("ok"):
+            return (r.get("message", "That didn't work."), "lights", "home_light", "")
+        sim = " (sim home)" if r.get("simulated") else ""
+        return (f"{args['name'].title()} lights {'on' if args['on'] else 'off'}{sim}.",
+                "lights", "home_light", args["name"])
+
+    if intent == "dim":
+        home = getattr(jarvis, "home", None)
+        if home is None:
+            return ("The home bridge isn't wired up.", "dim", "", "")
+        r = home.light(args["name"], True, args["level"])
+        if not r.get("ok"):
+            return (r.get("message", "That didn't work."), "dim", "home_light", "")
+        sim = " (sim home)" if r.get("simulated") else ""
+        return (f"{args['name'].title()} set to {args['level']}%{sim}.",
+                "dim", "home_light", args["name"])
+
+    if intent == "tv":
+        home = getattr(jarvis, "home", None)
+        if home is None:
+            return ("The home bridge isn't wired up.", "tv", "", "")
+        r = home.tv(args["on"])
+        if not r.get("ok"):
+            return (r.get("message", "That didn't work."), "tv", "home_tv", "")
+        sim = " (sim home)" if r.get("simulated") else ""
+        return (f"TV {'on' if args['on'] else 'off'}{sim}.", "tv", "home_tv", "")
+
+    if intent == "climate":
+        home = getattr(jarvis, "home", None)
+        if home is None:
+            return ("The home bridge isn't wired up.", "climate", "", "")
+        r = home.climate(args["target"])
+        sim = " (sim home)" if r.get("simulated") else ""
+        return (f"Thermostat set to {r.get('target'):g}°C{sim}.",
+                "climate", "home_climate", "")
+
+    if intent == "scene":
+        slug = args["name"].strip().lower().replace(" ", "-")
+        prep = getattr(jarvis, "prep", None)
+        actions = prep.resolve_routine(slug) if prep else None
+        if not actions:
+            h = datetime.datetime.now().hour
+            period = "morning" if h < 12 else "afternoon" if h < 18 else "evening"
+            return (f"Good {period}, {name}. (No '{slug}' scene is defined — "
+                    "add it under prep.routines in config.yaml and I'll run "
+                    "the whole thing.)", "scene", "", slug)
+        return (jarvis.take_care(slug), "scene", "fire_routine", slug)
+
+    if intent in ("sms", "call"):
+        hub = getattr(jarvis, "hub", None)
+        if hub is None:
+            return ("Fleet isn't enabled.", intent, "", "")
+        devs = [d for d in hub.names() if "phone" in d.lower()] or hub.names()
+        if not devs:
+            return ("No device is connected to send from.", intent, "", "")
+        dev = devs[0]
+        if intent == "sms":
+            r = hub.send(dev, "sms", {"to": args["who"], "text": args["text"]})
+            if r.get("ok"):
+                return (f"Sent from {dev} to {args['who']}: \"{args['text']}\"",
+                        "sms", "send_sms", dev)
+            return (f"Couldn't send that from {dev}: "
+                    + (r.get("message") or "not allowed on that agent")[:120],
+                    "sms", "send_sms", dev)
+        r = hub.send(dev, "call", {"number": args["who"]})
+        if r.get("ok"):
+            return (f"Calling {args['who']} from {dev}.", "call", "place_call", dev)
+        return (f"Couldn't place that call from {dev}: "
+                + (r.get("message") or "not allowed on that agent")[:120],
+                "call", "place_call", dev)
+
+    if intent == "see":
+        if jarvis is None:
+            return ("I can't see right now.", "see", "", "")
+        hub = getattr(jarvis, "hub", None)
+        device = args.get("device") or ""
+        if not device and hub:
+            device = next((d for d in hub.names() if "phone" not in d.lower()),
+                          hub.names()[0] if hub.names() else "")
+        if not device:
+            return ("No device is connected to look at.", "see", "", "")
+        r = jarvis.see(device)
+        if not r.get("ok"):
+            return (r.get("message", "That didn't work."), "see",
+                    "analyze_screen", device)
+        if r.get("description"):
+            return (f"Looking at {device}: {r['description']}",
+                    "see", "analyze_screen", device)
+        return (r.get("message", "Captured, but I can't describe it yet."),
+                "see", "analyze_screen", device)
 
     if intent == "volume":
         r = execute("set_volume", cfg=cfg, action=args["action"], level=args.get("level"))

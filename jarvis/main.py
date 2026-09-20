@@ -28,8 +28,11 @@ from .tools.fleet import set_hub as set_fleet_hub
 from .tools.fleet import set_prep as set_prep_tool
 from .tools.memory_tools import set_memory
 from .tools.market_tools import set_markets
+from .tools.bridge_tools import set_bridges
 from .tools import web as web_tools
 from .brain.fx import Markets
+from .brain.home import HomeBridge
+from .brain.music import MusicBridge
 
 log = logging.getLogger("jarvis")
 
@@ -49,6 +52,9 @@ class Jarvis:
         web_tools.set_demo(self.demo)
         self.markets = Markets(cfg, demo=self.demo)
         set_markets(self.markets)
+        self.home = HomeBridge(cfg, demo=self.demo, broadcast=self.broadcast)
+        self.music = MusicBridge(demo=self.demo, broadcast=self.broadcast)
+        set_bridges(self.home, self.music, self)
         self.learner = Learner(self.memory, cfg["learner"])
         provider = (cfg["llm"].get("provider") or "auto").lower()
         self.brain = LLMBrain(cfg) if provider != "none" else None
@@ -69,6 +75,8 @@ class Jarvis:
         self.voice = None            # attached by run.py when voice is enabled
         self.voice_available = False
         self.history: deque = deque(maxlen=12)
+        for m in self.memory.convo_tail(12):   # continuity across restarts
+            self.history.append(m)
         self.state_name = "idle"
         self._sockets: set = set()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -103,6 +111,9 @@ class Jarvis:
         p["calendar"] = self.memory.calendar_events(now_ts - 3600, now_ts + 86400)
         snap = self.markets.snapshot()
         p["markets"] = snap if snap.get("ok") else None
+        p["home"] = self.home.state()
+        p["music"] = self.music.status()
+        p["scenes"] = self.prep.routine_names() if self.prep else []
         return p
 
     def attach(self, ws) -> None:
@@ -205,6 +216,39 @@ class Jarvis:
                      f"({count} times). Want me to save that as routine "
                      f"'{name}'?"),
         })
+
+    # ================= vision ("what am I looking at?") =================
+    def see(self, device: str, question: str = "Describe what is on this screen."
+            ) -> dict:
+        """Capture a device screen and, if a vision-capable LLM is connected,
+        actually describe it. Always honest about which happened."""
+        if self.hub is None:
+            return {"ok": False, "message": "Fleet isn't enabled."}
+        r = self.hub.send(device, "screenshot")
+        if not r.get("ok") or not r.get("url"):
+            return {"ok": False,
+                    "message": (r.get("message")
+                                or f"couldn't capture {device}'s screen")}
+        url = r["url"]
+        path = os.path.join(self.hub.screenshot_dir(), os.path.basename(url))
+        brain = self.brain
+        if brain is not None and getattr(brain, "available", False) \
+                and (self.cfg.get("llm") or {}).get("vision", True):
+            import base64
+            try:
+                with open(path, "rb") as fh:
+                    b64 = base64.b64encode(fh.read()).decode()
+            except OSError as exc:
+                return {"ok": False, "message": f"capture unreadable: {exc}"}
+            desc = brain.vision(b64, question)
+            if desc:
+                return {"ok": True, "url": url, "description": desc,
+                        "vision": True}
+        return {"ok": True, "url": url, "description": None, "vision": False,
+                "message": ("Screen captured and on the overlay — but no "
+                            "vision-capable LLM is connected yet, so I can't "
+                            "describe it. Hook one up in config.yaml and I "
+                            "will.")}
 
     # ================= markets / rate watchers =================
     def maybe_rate_alerts(self) -> None:
@@ -622,6 +666,17 @@ class Jarvis:
             tag = " [sim feed]" if snap.get("simulated") else ""
             if bits:
                 lines.append("Markets" + tag + ": " + ", ".join(bits) + ".")
+        hs = self.home.state()
+        if hs.get("ok"):
+            on = [n for n, l in (hs.get("lights") or {}).items() if l.get("on")]
+            bits = [f"lights on: {', '.join(on) or 'none'}"]
+            bits.append("TV " + ("on" if (hs.get("tv") or {}).get("on") else "off"))
+            bits.append(f"climate {(hs.get('climate') or {}).get('target', 0):g}°C")
+            tag = " [sim home]" if hs.get("simulated") else ""
+            lines.append("Home" + tag + ": " + ", ".join(bits) + ".")
+        ms = self.music.status()
+        if ms.get("ok") and ms.get("playing"):
+            lines.append(f"Now playing: {ms.get('track')}.")
         try:
             from .tools.web import news as _news_tool
             items = _news_tool()["items"]
@@ -643,6 +698,7 @@ class Jarvis:
         never a dead connection.
         """
         self.history.append({"role": "user", "content": text})
+        self.memory.log_convo("user", text)
         try:
             if self.brain is not None and self.brain.available:
                 try:
@@ -680,6 +736,7 @@ class Jarvis:
                 pass
 
         self.history.append({"role": "assistant", "content": reply})
+        self.memory.log_convo("assistant", reply)
         try:
             self.learner.on_interaction(text, intent, tool or intent, detail)
         except Exception:

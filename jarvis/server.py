@@ -66,6 +66,11 @@ def create_app(cfg: dict) -> FastAPI:
         snap = jarvis.markets.snapshot()
         return snap
 
+    @app.get("/api/home")
+    async def _home():
+        return {"home": jarvis.home.state(), "music": jarvis.music.status(),
+                "scenes": jarvis.prep.routine_names() if jarvis.prep else []}
+
     @app.get("/api/calendar")
     async def _calendar():
         now = time.time()
