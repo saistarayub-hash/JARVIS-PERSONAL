@@ -43,7 +43,6 @@ class SelfEngine:
         self.routine_days = int(scfg.get("routine_min_days", 3))
         self._broadcast = broadcast or (lambda p: None)
         self._last_tick = 0.0
-        self._learned_announced: set = set()
 
     # ---------------- per-turn ----------------
     def on_turn(self, text: str, intent: str, tool: str, detail: str,
@@ -113,10 +112,8 @@ class SelfEngine:
                 break
         notes = []
         for (p, c), n in pairs.items():
-            if n >= self.alias_min and self.memory.self_rule_for(p) is None \
-                    and p not in self._learned_announced:
+            if n >= self.alias_min and self.memory.self_rule_for(p) is None:
                 if self.memory.add_self_rule(p, c):
-                    self._learned_announced.add(p)
                     note = (f"I've taught myself something: '{p}' now means "
                             f"'{c}'. Say 'unlearn {p}' if I got that wrong.")
                     notes.append(note)

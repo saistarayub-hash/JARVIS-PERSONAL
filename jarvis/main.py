@@ -34,6 +34,8 @@ from .brain.fx import Markets
 from .brain.home import HomeBridge
 from .brain.music import MusicBridge
 from .brain.self import SelfEngine
+from .brain.tasks import TaskEngine
+from .brain.webwatch import WebWatchEngine
 
 log = logging.getLogger("jarvis")
 
@@ -58,6 +60,8 @@ class Jarvis:
         set_bridges(self.home, self.music, self)
         self.self_engine = SelfEngine(self.memory, cfg,
                                       broadcast=self.broadcast)
+        self.tasks = TaskEngine(self.memory, broadcast=self.broadcast)
+        self.webwatch = WebWatchEngine(self.memory, broadcast=self.broadcast)
         self.learner = Learner(self.memory, cfg["learner"])
         provider = (cfg["llm"].get("provider") or "auto").lower()
         self.brain = LLMBrain(cfg) if provider != "none" else None
@@ -118,6 +122,8 @@ class Jarvis:
         p["music"] = self.music.status()
         p["scenes"] = self.prep.routine_names() if self.prep else []
         p["self"] = self.self_engine.stats()
+        p["tasks"] = self.memory.tasks_open()
+        p["webwatches"] = self.memory.web_watches()
         return p
 
     def attach(self, ws) -> None:
@@ -257,6 +263,11 @@ class Jarvis:
     # ================= self-improvement loop =================
     def maybe_self(self) -> None:
         self.self_engine.tick()
+
+    # ================= tasks & web watchers =================
+    def maybe_tasks_web(self) -> None:
+        self.tasks.tick()
+        self.webwatch.tick()
 
     # ================= markets / rate watchers =================
     def maybe_rate_alerts(self) -> None:
@@ -690,6 +701,14 @@ class Jarvis:
             landed = round(100 - st["fallback_pct"] - st["error_pct"], 1)
             lines.append(f"Self: {st['turns']} turns journaled, {landed}% landed, "
                          f"{len(st['self_rules'])} self-taught rule(s).")
+        due = [t for t in self.memory.tasks_open() if t["due_ts"]]
+        if due:
+            nxt = due[0]
+            mins = int((nxt["due_ts"] - time.time()) // 60)
+            when = (f"in {mins} min" if mins >= 0 else
+                    datetime.fromtimestamp(nxt["due_ts"]).strftime("%a %H:%M"))
+            lines.append(f"Tasks: {len(due)} timed open — next: "
+                         f"{nxt['text']} {when}.")
         try:
             from .tools.web import news as _news_tool
             items = _news_tool()["items"]

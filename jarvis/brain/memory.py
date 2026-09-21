@@ -128,6 +128,26 @@ class Memory:
                 CREATE TABLE IF NOT EXISTS self_tune(
                     key TEXT PRIMARY KEY, value TEXT, updated REAL
                 );
+                CREATE TABLE IF NOT EXISTS tasks(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    text TEXT NOT NULL,
+                    due_ts REAL,
+                    repeat TEXT DEFAULT '',
+                    done INTEGER DEFAULT 0,
+                    fired INTEGER DEFAULT 0,
+                    created REAL
+                );
+                CREATE TABLE IF NOT EXISTS web_watches(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT NOT NULL,
+                    keyword TEXT DEFAULT '',
+                    interval_s REAL DEFAULT 600,
+                    last_hash TEXT DEFAULT '',
+                    kw_seen INTEGER DEFAULT 0,
+                    last_check REAL DEFAULT 0,
+                    active INTEGER DEFAULT 1,
+                    note TEXT DEFAULT ''
+                );
                 """
             )
             self.db.commit()
@@ -583,3 +603,88 @@ class Memory:
             rows = self.db.execute(
                 "SELECT key, value, updated FROM self_tune ORDER BY key").fetchall()
         return [dict(r) for r in rows]
+
+    # ---------- tasks & reminders ----------
+    def add_task(self, text: str, due_ts: float | None = None,
+                 repeat: str = "") -> int:
+        with self._lock:
+            cur = self.db.execute(
+                "INSERT INTO tasks(text, due_ts, repeat, created) VALUES (?,?,?,?)",
+                (text, due_ts, repeat or "", time.time()))
+            self.db.commit()
+            return int(cur.lastrowid)
+
+    def tasks_open(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT * FROM tasks WHERE done = 0 ORDER BY "
+                "CASE WHEN due_ts IS NULL THEN 1 ELSE 0 END, due_ts ASC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def complete_task(self, ident) -> Dict[str, Any] | None:
+        with self._lock:
+            if str(ident).isdigit():
+                row = self.db.execute(
+                    "SELECT * FROM tasks WHERE id = ? AND done = 0",
+                    (int(ident),)).fetchone()
+            else:
+                row = self.db.execute(
+                    "SELECT * FROM tasks WHERE done = 0 AND lower(text) LIKE ? "
+                    "ORDER BY id DESC LIMIT 1", (f"%{str(ident).lower()}%",)).fetchone()
+            if not row:
+                return None
+            self.db.execute("UPDATE tasks SET done = 1 WHERE id = ?",
+                            (row["id"],))
+            self.db.commit()
+        return dict(row)
+
+    def clear_done_tasks(self) -> int:
+        with self._lock:
+            cur = self.db.execute("DELETE FROM tasks WHERE done = 1")
+            self.db.commit()
+        return cur.rowcount
+
+    def reschedule_task(self, tid: int, new_due: float, fired: int = 0) -> None:
+        with self._lock:
+            self.db.execute("UPDATE tasks SET due_ts = ?, fired = ? WHERE id = ?",
+                            (new_due, fired, tid))
+            self.db.commit()
+
+    def mark_task_fired(self, tid: int) -> None:
+        with self._lock:
+            self.db.execute("UPDATE tasks SET fired = 1, done = 1 WHERE id = ?",
+                            (tid,))
+            self.db.commit()
+
+    # ---------- web watchers ----------
+    def add_web_watch(self, url: str, keyword: str = "",
+                      interval_s: float = 600) -> int:
+        with self._lock:
+            cur = self.db.execute(
+                "INSERT INTO web_watches(url, keyword, interval_s) VALUES (?,?,?)",
+                (url, keyword or "", interval_s))
+            self.db.commit()
+            return int(cur.lastrowid)
+
+    def web_watches(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        q = "SELECT * FROM web_watches" + (" WHERE active = 1" if active_only else "")
+        with self._lock:
+            rows = self.db.execute(q).fetchall()
+        return [dict(r) for r in rows]
+
+    def drop_web_watch(self, url: str) -> int:
+        with self._lock:
+            cur = self.db.execute(
+                "DELETE FROM web_watches WHERE url LIKE ?", (f"%{url}%",))
+            self.db.commit()
+        return cur.rowcount
+
+    def update_web_watch(self, wid: int, last_hash: str, kw_seen: int,
+                         note: str = "") -> None:
+        with self._lock:
+            self.db.execute(
+                "UPDATE web_watches SET last_hash = ?, kw_seen = ?, "
+                "last_check = ?, note = ? WHERE id = ?",
+                (last_hash, kw_seen, time.time(), note, wid))
+            self.db.commit()

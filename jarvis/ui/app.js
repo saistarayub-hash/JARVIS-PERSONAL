@@ -187,6 +187,46 @@ function renderMusic(m) {
   el.textContent = `▶ ${m.track || "music"}  ·  vol ${m.volume}%`
     + (m.simulated ? "  (sim)" : "");
 }
+function renderTasks(list) {
+  const el = $("#tasks");
+  el.innerHTML = "";
+  if (!list || !list.length) {
+    el.innerHTML = '<li class="empty">List is clear.</li>';
+    return;
+  }
+  list.forEach((t) => {
+    const li = document.createElement("li");
+    li.className = "mkt";
+    const due = t.due_ts
+      ? new Date(t.due_ts * 1000).toLocaleString([], {
+          weekday: "short", hour: "2-digit", minute: "2-digit" })
+      : "someday";
+    li.innerHTML = `<span class="sym">${t.id}) ${t.text}</span>`
+      + `<span class="px">${due}${t.repeat ? " ↻" : ""}</span>`;
+    const b = document.createElement("button");
+    b.className = "ghost small";
+    b.textContent = "DONE";
+    b.onclick = () => ws.send(JSON.stringify({ type: "task_done", id: t.id }));
+    li.appendChild(b);
+    el.appendChild(li);
+  });
+}
+function renderWebW(list) {
+  const el = $("#webw");
+  el.innerHTML = "";
+  if (!list || !list.length) {
+    el.innerHTML = '<li class="empty">Nothing watched.</li>';
+    return;
+  }
+  list.forEach((w) => {
+    const li = document.createElement("li");
+    li.className = "mkt";
+    li.innerHTML = `<span class="sym">🌐 ${w.url.replace(/^https?:\/\//, "")}`
+      + (w.keyword ? ` “${w.keyword}”` : "") + `</span>`
+      + `<span class="px">${w.note || "…"} </span>`;
+    el.appendChild(li);
+  });
+}
 function renderSelf(st) {
   const el = $("#selfstats"), rl = $("#selfrules");
   if (!st) { el.innerHTML = '<li class="empty">Self-engine off.</li>'; return; }
@@ -428,11 +468,15 @@ function handle(m) {
       renderMusic(m.music);
       renderScenes(m.scenes || []);
       renderSelf(m.self);
+      renderTasks(m.tasks || []);
+      renderWebW(m.webwatches || []);
       break;
     case "markets": renderMarkets(m); break;
     case "home": renderHome(m); break;
     case "music": renderMusic(m); break;
     case "self": renderSelf(m); break;
+    case "tasks": renderTasks(m.tasks); break;
+    case "webwatches": renderWebW(m.watches); break;
     case "state": setState(m.state); break;
     case "level": currentLevel = m.value; break;
     case "user": userLine.textContent = m.text; break;

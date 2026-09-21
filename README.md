@@ -67,6 +67,19 @@ sees what you're doing across all your machines, and gets itself ready
 - 📱 **Phone superpowers** — the Android agent (Termux) can really send SMS
   (`termux-sms-send`) and place calls (`termux-telephony-call`) when started
   with `--allow sms --allow call`: "text Sam I'm running late", "call mom".
+- ✅ **Tasks & reminders** — "remind me to call the bank in 20 minutes / at 5pm /
+  tomorrow at 9 / every day at 8:30", "add task email Sam", "my tasks",
+  "done 3". Timed reminders fire through the announce + alert channel;
+  repeats reschedule themselves; the Tasks panel has DONE buttons.
+- 🌐 **Web watchers** — "watch <url> for <keyword> every 30 seconds" or
+  "monitor <url>": JARVIS keeps re-reading the page and alerts on content
+  change or first keyword appearance (with a fresh-text snippet), tracks
+  unreachable pages honestly, and lists/stops them via "my web watches" /
+  "stop watching <host>". `--demo` serves `/demo/page`, a local page that
+  flips every 2 minutes, so watchers are testable with no internet.
+  **Honest limits:** text-level fetching only — no JS rendering, no logins,
+  no form filling, no browser automation. For that you'd bolt on Playwright;
+  everything up to it is real here.
 - 🪞 **SELF — it is its own study object.** Every turn is journaled; your
   thanks and corrections become reward signals; a phrase JARVIS misunderstood
   twice and you rephrased becomes a **permanent self-taught rule** (announced
@@ -102,6 +115,9 @@ lights off all        ← smart home (Home Assistant, or labelled sim)
 play focus music      ← real MPRIS control when a player is running
 text sam: on my way   ← real SMS from your Termux phone agent
 what am i looking at  ← screen capture + vision model when connected
+remind me to stretch in 20 minutes
+my tasks              ← open list; "done 3" ticks one off
+watch <url> for launch every 30 seconds   ← page-change/keyword alerts
 i love coffee         ← auto-learned, no "remember" needed
 i have a meeting with Priya at 4 pm   ← lands on the calendar, autoprepped
 meetings today

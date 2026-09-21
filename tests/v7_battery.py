@@ -44,7 +44,9 @@ async def main():
             r = await send_and_wait(ws, "lights on kitchen")
         check("teaching pairs sent (fallback then intent)", True, "")
 
-        learned = None
+        learned = next((m for m in side
+                        if m["type"] == "announce"
+                        and "taught myself" in m.get("text", "")), None)
         deadline = time.time() + 100
         while time.time() < deadline and learned is None:
             try:

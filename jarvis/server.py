@@ -34,10 +34,14 @@ def create_app(cfg: dict) -> FastAPI:
                     jarvis.maybe_meeting_prep()
                     jarvis.maybe_rate_alerts()
                     jarvis.maybe_self()
+                    # web watchers do blocking HTTP — never on the event loop
+                    # (they may even fetch this very server: /demo/page)
+                    await asyncio.to_thread(jarvis.maybe_tasks_web)
                     if tick % 5 == 0:  # sequence-learner every ~5 min
                         jarvis.maybe_sequence_suggestion()
                     if tick % 5 == 2:  # push fresh markets to open UIs
-                        snap = jarvis.markets.snapshot(force=True)
+                        snap = await asyncio.to_thread(
+                            jarvis.markets.snapshot, True)
                         if snap.get("ok"):
                             jarvis.broadcast({"type": "markets", **snap})
                 except Exception:
@@ -75,6 +79,28 @@ def create_app(cfg: dict) -> FastAPI:
     @app.get("/api/self")
     async def _self():
         return jarvis.self_engine.stats()
+
+    @app.get("/api/tasks")
+    async def _tasks():
+        return {"tasks": jarvis.memory.tasks_open()}
+
+    @app.get("/api/webwatches")
+    async def _webwatches():
+        return {"watches": jarvis.memory.web_watches()}
+
+    @app.get("/demo/page")
+    async def _demo_page():
+        """A local page that flips state every 2 minutes, so web-watchers are
+        exercisable even with no internet (watch THIS url in demos)."""
+        import time as _t
+        phase = int(_t.time() // 120) % 2
+        state = "launching" if phase else "standing by"
+        return HTMLResponse(
+            f"<html><head><title>Demo status page</title></head><body>"
+            f"<h1>Project X status: {state}</h1>"
+            f"<p>Telemetry nominal. Phase {phase}. This page changes every "
+            f"two minutes so JARVIS web-watchers have something honest to "
+            f"watch offline.</p></body></html>")
 
     @app.get("/api/calendar")
     async def _calendar():
@@ -163,6 +189,9 @@ def create_app(cfg: dict) -> FastAPI:
                                               f"'take care of {name}'."})
                     continue
                 if mtype == "routine_dismiss":
+                    continue
+                if mtype == "task_done":
+                    jarvis.tasks.complete_and_push(m.get("id") or m.get("text"))
                     continue
                 if mtype != "chat":
                     continue

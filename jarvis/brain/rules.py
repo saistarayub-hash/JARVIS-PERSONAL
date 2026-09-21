@@ -22,7 +22,7 @@ HELP_TEXT = (
     "with Sam at 3 pm', 'cancel design sync', 'import my calendar from "
     "work.ics'. Fleet: 'status of all devices', 'run disk on web-01', "
     "'watch web-01' (I'll alert you if it drops), 'screenshot my-mac' (what's "
-    "on its screen). Web and markets: 'what's the news', 'how much is 100 usd "
+    "on its screen). Tasks and web: 'remind me to X in 20 minutes', 'my tasks', 'done 3', 'watch <url> for <keyword>' (page-change alerts). Web and markets: 'what's the news', 'how much is 100 usd "
     "in zar', 'eurusd', 'bitcoin price', 'markets', 'time in tokyo', and "
     "'watch usdzar above 19' - a real alert fires the moment it crosses. "
     "Prep: 'brief me', 'prep work', 'take care of work' (background, with a "
@@ -119,7 +119,18 @@ RE_SELF = (r"^(?:self check|check yourself|diagnose yourself|introspect|"
            r"how are you feeling|how do you feel|what do you know about "
            r"yourself|your stats|how have you been)$")
 RE_UNLEARN = r"^unlearn (.+)$"
-RE_CAL_ADD = r"^add (?:a |an |my )?(meeting|call|appointment|deadline|task|event) (.+)$"
+RE_REMIND = r"^remind me to (.+)$"
+RE_TASK_ADD = r"^(?:add|new) task (.+)$"
+RE_TASKS = r"^(?:my tasks|tasks|todo(?: list)?|what'?s on my list|open tasks)$"
+RE_TASK_DONE = (r"^(?:done|complete|mark done|tick)(?: task)?\s+(\d+|.+?)$|"
+                r"^task (\d+) (?:done|completed)$")
+RE_TASK_CLEAR = r"^clear (?:done )?tasks$"
+RE_WEBWATCH = (r"^(?:watch|monitor) "
+               r"(https?://\S+|[a-z0-9\.\-]+\.[a-z]{2,}(?:/\S*)?)"
+               r"(?:\s+for\s+(.+?))?"
+               r"(?:\s+every\s+(\d+)\s*(minutes?|mins?|seconds?|secs?))?$")
+RE_WEBWATCHES = r"^(?:my )?web watches$|^stop watching (?:the )?(\S+)$"
+RE_CAL_ADD = r"^add (?:a |an |my )?(meeting|call|appointment|deadline|event) (.+)$"
 RE_CAL_CANCEL = r"^cancel (?:the )?(?:meeting |call |appointment |deadline |task |event )?(.+)$"
 RE_CAL_IMPORT = r"^import (?:my )?(?:calendar|events|ics) from (\S+\.ics)$"
 RE_SHOT = r"^(?:screenshot|capture|take a screenshot of|what'?s on the screen of) ([a-z0-9_\-\.]+)$"
@@ -172,6 +183,14 @@ def _match(original: str, jarvis=None, _depth: int = 0) -> Optional[Tuple[str, D
         return ("worldtime", {"city": (m.group(1) or m.group(2)).strip()})
     if re.match(RE_TIME, t):
         return ("time", {})
+    m = re.match(RE_WEBWATCH, t)
+    if m:
+        n = int(m.group(3) or 0)
+        unit = (m.group(4) or "minutes").lower()
+        secs = n * (60 if unit.startswith("min") else 1) if n else 0
+        return ("webwatch", {"url": m.group(1),
+                             "keyword": (m.group(2) or "").strip(),
+                             "every_s": secs})
     m = re.search(r"https?://\S+", t)
     if m and len(t) < 300:
         return ("read", {"url": m.group(0)})
@@ -219,7 +238,7 @@ def _match(original: str, jarvis=None, _depth: int = 0) -> Optional[Tuple[str, D
     if m and (not devices or m.group(1) in devices):
         return ("watch", {"name": m.group(1)})
     m = re.match(RE_UNWATCH, t)
-    if m:
+    if m and (not devices or m.group(1) in devices):
         return ("unwatch", {"name": m.group(1)})
     m = re.match(RE_TAKE_CARE, t)
     if m:
@@ -332,6 +351,23 @@ def _match(original: str, jarvis=None, _depth: int = 0) -> Optional[Tuple[str, D
     m = re.match(RE_UNLEARN, t)
     if m:
         return ("unlearn", {"what": m.group(1).strip()})
+    m = re.match(RE_TASK_DONE, t)
+    if m:
+        return ("task_done", {"what": (m.group(1) or m.group(2)).strip()})
+    m = re.match(RE_REMIND, t)
+    if m:
+        return ("remind", {"rest": m.group(1).strip()})
+    m = re.match(RE_TASK_ADD, t)
+    if m:
+        return ("remind", {"rest": m.group(1).strip()})
+    if re.match(RE_TASKS, t):
+        return ("tasks", {})
+    if re.match(RE_TASK_CLEAR, t):
+        return ("task_clear", {})
+    m = re.match(RE_WEBWATCHES, t)
+    if m:
+        return ("webwatches", {"stop": (m.group(1) or "").strip()})
+
     if re.match(RE_GREET, t) and len(t) <= 40:
         return ("greet", {})
     if _depth == 0:
@@ -922,6 +958,62 @@ def rule_respond(text: str, cfg: dict, memory, jarvis=None) -> Tuple[str, str, s
                     "unlearn", "", args["what"])
         return (f"I hadn't taught myself '{args['what']}'.",
                 "unlearn", "", args["what"])
+
+    if intent == "remind":
+        eng = getattr(jarvis, "tasks", None)
+        if eng is None:
+            return ("The task engine isn't wired up.", "remind", "", "")
+        from .tasks import split_when
+        text, when = split_when(args["rest"])
+        if not text:
+            return ("Remind you to… what, sir?", "remind", "", "")
+        r = eng.add(text, when)
+        return (f"On your list: \"{r['text']}\" [{r['label']}]. I'll flag it "
+                f"when it's due.", "remind", "", r["label"])
+
+    if intent == "tasks":
+        eng = getattr(jarvis, "tasks", None)
+        return (eng.list_text() if eng else "The task engine isn't wired up.",
+                "tasks", "", "")
+
+    if intent == "task_done":
+        eng = getattr(jarvis, "tasks", None)
+        if eng is None:
+            return ("The task engine isn't wired up.", "task_done", "", "")
+        row = eng.complete_and_push(args["what"])
+        if row:
+            return (f"Tick — \"{row['text']}\" done. Well played, sir.",
+                    "task_done", "", row["text"])
+        return (f"I couldn't find an open task matching '{args['what']}'.",
+                "task_done", "", args["what"])
+
+    if intent == "task_clear":
+        n = memory.clear_done_tasks()
+        return (f"Cleared {n} finished task(s).", "task_clear", "", "")
+
+    if intent == "webwatch":
+        eng = getattr(jarvis, "webwatch", None)
+        if eng is None:
+            return ("The web-watch engine isn't wired up.", "webwatch", "", "")
+        interval = args.get("every_s") or 600
+        r = eng.add(args["url"], args.get("keyword") or "", interval)
+        secs = max(30, interval)
+        every = f"{secs // 60} min" if secs >= 60 else f"{secs}s"
+        kw = f" for '{args['keyword']}'" if args.get("keyword") else ""
+        return (f"I'll keep reading {r['url']}{kw} every {every} and flag any "
+                f"change. Say 'my web watches' to review.",
+                "webwatch", "", r["url"])
+
+    if intent == "webwatches":
+        eng = getattr(jarvis, "webwatch", None)
+        if eng is None:
+            return ("The web-watch engine isn't wired up.", "webwatches", "", "")
+        if args.get("stop"):
+            n = memory.drop_web_watch(args["stop"])
+            return (f"Stopped watching {args['stop']}." if n else
+                    f"I wasn't watching anything matching '{args['stop']}'.",
+                    "webwatches", "", args["stop"])
+        return (eng.list_text(), "webwatches", "", "")
 
     if intent == "stop":
         return ("Standing by.", "stop", "", "")
