@@ -33,6 +33,7 @@ def create_app(cfg: dict) -> FastAPI:
                     jarvis.maybe_preps()
                     jarvis.maybe_meeting_prep()
                     jarvis.maybe_rate_alerts()
+                    jarvis.maybe_self()
                     if tick % 5 == 0:  # sequence-learner every ~5 min
                         jarvis.maybe_sequence_suggestion()
                     if tick % 5 == 2:  # push fresh markets to open UIs
@@ -70,6 +71,10 @@ def create_app(cfg: dict) -> FastAPI:
     async def _home():
         return {"home": jarvis.home.state(), "music": jarvis.music.status(),
                 "scenes": jarvis.prep.routine_names() if jarvis.prep else []}
+
+    @app.get("/api/self")
+    async def _self():
+        return jarvis.self_engine.stats()
 
     @app.get("/api/calendar")
     async def _calendar():

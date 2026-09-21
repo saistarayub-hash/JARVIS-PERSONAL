@@ -33,6 +33,7 @@ from .tools import web as web_tools
 from .brain.fx import Markets
 from .brain.home import HomeBridge
 from .brain.music import MusicBridge
+from .brain.self import SelfEngine
 
 log = logging.getLogger("jarvis")
 
@@ -55,6 +56,8 @@ class Jarvis:
         self.home = HomeBridge(cfg, demo=self.demo, broadcast=self.broadcast)
         self.music = MusicBridge(demo=self.demo, broadcast=self.broadcast)
         set_bridges(self.home, self.music, self)
+        self.self_engine = SelfEngine(self.memory, cfg,
+                                      broadcast=self.broadcast)
         self.learner = Learner(self.memory, cfg["learner"])
         provider = (cfg["llm"].get("provider") or "auto").lower()
         self.brain = LLMBrain(cfg) if provider != "none" else None
@@ -114,6 +117,7 @@ class Jarvis:
         p["home"] = self.home.state()
         p["music"] = self.music.status()
         p["scenes"] = self.prep.routine_names() if self.prep else []
+        p["self"] = self.self_engine.stats()
         return p
 
     def attach(self, ws) -> None:
@@ -249,6 +253,10 @@ class Jarvis:
                             "vision-capable LLM is connected yet, so I can't "
                             "describe it. Hook one up in config.yaml and I "
                             "will.")}
+
+    # ================= self-improvement loop =================
+    def maybe_self(self) -> None:
+        self.self_engine.tick()
 
     # ================= markets / rate watchers =================
     def maybe_rate_alerts(self) -> None:
@@ -677,6 +685,11 @@ class Jarvis:
         ms = self.music.status()
         if ms.get("ok") and ms.get("playing"):
             lines.append(f"Now playing: {ms.get('track')}.")
+        st = self.self_engine.stats()
+        if st["turns"]:
+            landed = round(100 - st["fallback_pct"] - st["error_pct"], 1)
+            lines.append(f"Self: {st['turns']} turns journaled, {landed}% landed, "
+                         f"{len(st['self_rules'])} self-taught rule(s).")
         try:
             from .tools.web import news as _news_tool
             items = _news_tool()["items"]
@@ -695,8 +708,9 @@ class Jarvis:
         """Run one user request through the best available brain.
 
         Bulletproof by design: a bug anywhere becomes a graceful reply,
-        never a dead connection.
+        never a dead connection. Every turn is journaled for the SELF engine.
         """
+        t0 = time.monotonic()
         self.history.append({"role": "user", "content": text})
         self.memory.log_convo("user", text)
         try:
@@ -737,6 +751,12 @@ class Jarvis:
 
         self.history.append({"role": "assistant", "content": reply})
         self.memory.log_convo("assistant", reply)
+        try:
+            self.self_engine.on_turn(text, intent, tool, detail,
+                                     intent != "error",
+                                     (time.monotonic() - t0) * 1000)
+        except Exception:  # noqa: BLE001 — self-observation must never break a turn
+            log.exception("self-engine on_turn failed")
         try:
             self.learner.on_interaction(text, intent, tool or intent, detail)
         except Exception:

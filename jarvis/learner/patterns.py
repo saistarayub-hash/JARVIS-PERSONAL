@@ -49,7 +49,9 @@ class Learner:
         window = int(self.cfg.get("window_hours", 1))
         for h in self.memory.matches_now(window_hours=window):
             key = f"{h['tool']}:{h['detail']}:{h['weekday']}:{h['hour']}"
-            if self.memory.recently_suggested(key):
+            mult = float(self.memory.tune_get("proactive_cooldown_mult", "1.0")
+                         or 1.0)
+            if self.memory.recently_suggested(key, cooldown_minutes=360 * mult):
                 continue
             verb = self._phrase(HABIT_VERBS.get(h["tool"]), h)
             action = self._phrase(HABIT_ACTIONS.get(h["tool"]), h, bare=True)

@@ -67,6 +67,16 @@ sees what you're doing across all your machines, and gets itself ready
 - 📱 **Phone superpowers** — the Android agent (Termux) can really send SMS
   (`termux-sms-send`) and place calls (`termux-telephony-call`) when started
   with `--allow sms --allow call`: "text Sam I'm running late", "call mom".
+- 🪞 **SELF — it is its own study object.** Every turn is journaled; your
+  thanks and corrections become reward signals; a phrase JARVIS misunderstood
+  twice and you rephrased becomes a **permanent self-taught rule** (announced
+  when learned, reversible with `unlearn …`); a request you repeat at the same
+  hour across days becomes a **self-created scheduled routine**; suggestion
+  aggressiveness is tuned from your acceptance rate; flaky tools get marked
+  degraded and retried later. Ask **"why did you say that?"** for the real
+  decision trace, or **"self check"** for its weekly self-report. The Self
+  panel in the UI shows turns, landed-%, praise/corrections and every rule it
+  taught itself.
 - ✨ **Hologram UI** — animated ring + **Command Center** panel: fleet health,
   today's activity, preps, memories, habits.
 

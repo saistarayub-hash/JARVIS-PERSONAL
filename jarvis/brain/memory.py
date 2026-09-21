@@ -114,6 +114,20 @@ class Memory:
                     text TEXT NOT NULL,
                     ts REAL
                 );
+                CREATE TABLE IF NOT EXISTS journal(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL, text TEXT, intent TEXT, tool TEXT, detail TEXT,
+                    ok INTEGER, latency REAL, signal INTEGER DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS self_rules(
+                    pattern TEXT PRIMARY KEY,
+                    canon TEXT NOT NULL,
+                    uses INTEGER DEFAULT 0,
+                    created_at REAL
+                );
+                CREATE TABLE IF NOT EXISTS self_tune(
+                    key TEXT PRIMARY KEY, value TEXT, updated REAL
+                );
                 """
             )
             self.db.commit()
@@ -473,3 +487,99 @@ class Memory:
                 "SELECT role, text FROM convo WHERE ts >= ? "
                 "ORDER BY id DESC LIMIT ?", (since, n)).fetchall()
         return [{"role": r["role"], "content": r["text"]} for r in reversed(rows)]
+
+    # ---------- self-model: decision journal, self-taught rules, tuning ----
+    def log_journal(self, text: str, intent: str, tool: str, detail: str,
+                    ok: bool, latency: float,
+                    ts: float | None = None) -> int:
+        with self._lock:
+            cur = self.db.execute(
+                "INSERT INTO journal(ts, text, intent, tool, detail, ok, latency) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (ts if ts is not None else time.time(), (text or "")[:300],
+                 intent, tool, (detail or "")[:120], 1 if ok else 0, latency))
+            self.db.commit()
+            return int(cur.lastrowid)
+
+    def set_journal_signal(self, jid: int, sig: int) -> None:
+        with self._lock:
+            self.db.execute("UPDATE journal SET signal = ? WHERE id = ?",
+                            (sig, jid))
+            self.db.commit()
+
+    def last_journal(self) -> Dict[str, Any] | None:
+        with self._lock:
+            row = self.db.execute(
+                "SELECT * FROM journal ORDER BY id DESC LIMIT 1").fetchone()
+        return dict(row) if row else None
+
+    def journal_since(self, since: float, limit: int = 400) -> List[Dict[str, Any]]:
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT * FROM journal WHERE ts >= ? ORDER BY id ASC LIMIT ?",
+                (since, limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def journal_all(self, limit: int = 2000) -> List[Dict[str, Any]]:
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT * FROM journal ORDER BY id DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def add_self_rule(self, pattern: str, canon: str) -> bool:
+        with self._lock:
+            try:
+                self.db.execute(
+                    "INSERT INTO self_rules(pattern, canon, uses, created_at) "
+                    "VALUES (?,?,0,?)", (pattern, canon, time.time()))
+                self.db.commit()
+                return True
+            except sqlite3.IntegrityError:
+                return False
+
+    def self_rule_for(self, text: str) -> Dict[str, Any] | None:
+        with self._lock:
+            row = self.db.execute(
+                "SELECT pattern, canon FROM self_rules WHERE pattern = ?",
+                ((text or "").strip().lower(),)).fetchone()
+        return dict(row) if row else None
+
+    def bump_self_rule(self, pattern: str) -> None:
+        with self._lock:
+            self.db.execute("UPDATE self_rules SET uses = uses + 1 "
+                            "WHERE pattern = ?", (pattern,))
+            self.db.commit()
+
+    def self_rules_all(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT pattern, canon, uses FROM self_rules "
+                "ORDER BY created_at DESC").fetchall()
+        return [dict(r) for r in rows]
+
+    def drop_self_rule(self, pattern: str) -> bool:
+        with self._lock:
+            cur = self.db.execute("DELETE FROM self_rules WHERE pattern = ?",
+                                  (pattern.strip().lower(),))
+            self.db.commit()
+        return cur.rowcount > 0
+
+    def tune_get(self, key: str, default: str = "") -> str:
+        with self._lock:
+            row = self.db.execute(
+                "SELECT value FROM self_tune WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def tune_set(self, key: str, value: str) -> None:
+        with self._lock:
+            self.db.execute(
+                "INSERT OR REPLACE INTO self_tune(key, value, updated) "
+                "VALUES (?,?,?)", (key, value, time.time()))
+            self.db.commit()
+
+    def tunes_all(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT key, value, updated FROM self_tune ORDER BY key").fetchall()
+        return [dict(r) for r in rows]

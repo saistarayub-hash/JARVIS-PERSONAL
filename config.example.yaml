@@ -52,6 +52,18 @@ jarvis:
     # Providers (no keys needed): stooq -> frankfurter(ECB) -> open.er-api,
     # crypto via coingecko. Offline + --demo falls back to a labelled sim feed.
 
+  # ---- SELF: JARVIS watching and rewriting itself ----
+  self:
+    enabled: true
+    tune_every_minutes: 5   # how often the self-improvement pass runs
+    alias_min_uses: 2       # repeats of a misunderstood phrase before it's
+                            # mined into a permanent self-taught rule
+    routine_min_days: 3     # distinct days of a repeated request before it
+                            # becomes a self-created scheduled routine
+    # The SELF engine journals every turn, reads your thanks/corrections as
+    # reward signals, tunes its own proactive cooldowns from them, marks
+    # flaky tools degraded, and explains itself on "why did you say that?".
+
   # ---- CALENDAR: meetings made real (autopilot + briefings + import) ----
   calendar:
     lead_minutes: 10    # how far before a meeting to start prepping

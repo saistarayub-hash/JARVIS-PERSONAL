@@ -113,6 +113,12 @@ RE_CALL = r"^(?:call|phone|ring|dial) ([a-z0-9 _\-]+?)(?: please)?$"
 RE_SEE = (r"^(?:what do you see|look at my screen|what am i looking at|"
           r"what'?s on (?:my|the) screen(?: of ([a-z0-9_\-\.]+))?|"
           r"describe (?:my|the) screen(?: on ([a-z0-9_\-\.]+))?)$")
+RE_WHY = (r"^(?:why (?:did you (?:say|do|suggest) that|that|so|this)|"
+          r"explain yourself|why did you say that\??)$")
+RE_SELF = (r"^(?:self check|check yourself|diagnose yourself|introspect|"
+           r"how are you feeling|how do you feel|what do you know about "
+           r"yourself|your stats|how have you been)$")
+RE_UNLEARN = r"^unlearn (.+)$"
 RE_CAL_ADD = r"^add (?:a |an |my )?(meeting|call|appointment|deadline|task|event) (.+)$"
 RE_CAL_CANCEL = r"^cancel (?:the )?(?:meeting |call |appointment |deadline |task |event )?(.+)$"
 RE_CAL_IMPORT = r"^import (?:my )?(?:calendar|events|ics) from (\S+\.ics)$"
@@ -151,7 +157,7 @@ def _extract(pattern: str, original: str, group: int = 1) -> str:
     return ""
 
 
-def _match(original: str, jarvis=None) -> Optional[Tuple[str, Dict]]:
+def _match(original: str, jarvis=None, _depth: int = 0) -> Optional[Tuple[str, Dict]]:
     t = re.sub(r"\s+", " ", original.strip().lower().rstrip(".!?"))
     if not t:
         return None
@@ -319,8 +325,22 @@ def _match(original: str, jarvis=None) -> Optional[Tuple[str, Dict]]:
         return ("stop", {})
     if re.match(RE_HELP, t):
         return ("help", {})
+    if re.match(RE_WHY, t):
+        return ("why", {})
+    if re.match(RE_SELF, t):
+        return ("selfcheck", {})
+    m = re.match(RE_UNLEARN, t)
+    if m:
+        return ("unlearn", {"what": m.group(1).strip()})
     if re.match(RE_GREET, t) and len(t) <= 40:
         return ("greet", {})
+    if _depth == 0:
+        mem = getattr(jarvis, "memory", None) if jarvis else None
+        if mem is not None:
+            sr = mem.self_rule_for(t)
+            if sr:
+                mem.bump_self_rule(sr["pattern"])
+                return _match(sr["canon"], jarvis, _depth=1)
     return None
 
 
@@ -871,6 +891,37 @@ def rule_respond(text: str, cfg: dict, memory, jarvis=None) -> Tuple[str, str, s
                     "files", "find_files", "")
         return (f"Found {len(found)} — e.g. " + ", ".join(found[:3]) + ".",
                 "files", "find_files", "")
+
+    if intent == "why":
+        eng = getattr(jarvis, "self_engine", None)
+        if eng is None:
+            return ("The self-engine isn't wired up.", "why", "", "")
+        return (eng.explain(), "why", "", "")
+
+    if intent == "selfcheck":
+        eng = getattr(jarvis, "self_engine", None)
+        if eng is None:
+            return ("The self-engine isn't wired up.", "selfcheck", "", "")
+        st = eng.stats()
+        landed = round(100 - st["fallback_pct"] - st["error_pct"], 1)
+        rules = "; ".join(f"'{r['pattern']}' → '{r['canon']}'"
+                          for r in st["self_rules"][:4]) or "none yet"
+        tunes = "; ".join(f"{t['key']}={t['value']}" for t in st["tunes"]
+                          if t["value"]) or "nothing needed yet"
+        top = ", ".join(f"{i}×{c}" for i, c in st["top_intents"][:3]) or "n/a"
+        return (f"Self-report: {st['turns']} turns journaled this week, "
+                f"{landed}% landed without fallback or error, average "
+                f"{st['avg_latency_ms']:.0f} ms. Praise {st['praise']}, "
+                f"corrections {st['corrections']} — cooldown multiplier tuned "
+                f"from that. Top intents: {top}. Self-taught rules: {rules}. "
+                f"Active tunings: {tunes}.", "selfcheck", "", "")
+
+    if intent == "unlearn":
+        if memory.drop_self_rule(args["what"]):
+            return (f"Unlearned '{args['what']}' — I'll treat it as new again.",
+                    "unlearn", "", args["what"])
+        return (f"I hadn't taught myself '{args['what']}'.",
+                "unlearn", "", args["what"])
 
     if intent == "stop":
         return ("Standing by.", "stop", "", "")

@@ -187,6 +187,32 @@ function renderMusic(m) {
   el.textContent = `▶ ${m.track || "music"}  ·  vol ${m.volume}%`
     + (m.simulated ? "  (sim)" : "");
 }
+function renderSelf(st) {
+  const el = $("#selfstats"), rl = $("#selfrules");
+  if (!st) { el.innerHTML = '<li class="empty">Self-engine off.</li>'; return; }
+  const landed = Math.round(100 - (st.fallback_pct || 0) - (st.error_pct || 0));
+  el.innerHTML = "";
+  [
+    ["turns journaled", st.turns],
+    ["landed first try", landed + "%"],
+    ["praise / corrections", `${st.praise} / ${st.corrections}`],
+    ["avg latency", (st.avg_latency_ms || 0) + " ms"],
+    ["top intents", (st.top_intents || []).map(([i, c]) => `${i}×${c}`).join(", ") || "—"],
+  ].forEach(([k, v]) => {
+    const li = document.createElement("li");
+    li.className = "mkt";
+    li.innerHTML = `<span class="sym">${k}</span><span class="px">${v}</span>`;
+    el.appendChild(li);
+  });
+  rl.innerHTML = "";
+  (st.self_rules || []).forEach((r) => {
+    const li = document.createElement("li");
+    li.className = "mkt";
+    li.innerHTML = `<span class="sym">🧬 '${r.pattern}'</span>`
+      + `<span class="px">→ '${r.canon}' (${r.uses}×)</span>`;
+    rl.appendChild(li);
+  });
+}
 function renderMarkets(snap) {
   const el = $("#markets"), chip = $("#mkt-src");
   if (!snap || !snap.ok) {
@@ -401,10 +427,12 @@ function handle(m) {
       renderHome(m.home);
       renderMusic(m.music);
       renderScenes(m.scenes || []);
+      renderSelf(m.self);
       break;
     case "markets": renderMarkets(m); break;
     case "home": renderHome(m); break;
     case "music": renderMusic(m); break;
+    case "self": renderSelf(m); break;
     case "state": setState(m.state); break;
     case "level": currentLevel = m.value; break;
     case "user": userLine.textContent = m.text; break;
