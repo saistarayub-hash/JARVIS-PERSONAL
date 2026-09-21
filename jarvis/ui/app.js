@@ -227,6 +227,41 @@ function renderWebW(list) {
     el.appendChild(li);
   });
 }
+function renderPush(p) {
+  const st = p && p.status, el = $("#pushstate");
+  if (!st) { el.className = "empty"; el.textContent = "Push bridge off."; return; }
+  el.className = "";
+  el.textContent = `mode ${st.mode} · telegram ${st.telegram ? "ready" : "—"} · mail ${st.mail ? "ready" : "—"}`;
+  const ob = $("#outbox"); ob.innerHTML = "";
+  const box = (p && p.outbox) || [];
+  if (!box.length) ob.innerHTML = '<li class="empty">Outbox empty.</li>';
+  box.forEach((o) => {
+    const li = document.createElement("li");
+    li.className = "mkt";
+    const ts = new Date(o.ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    li.innerHTML = `<span class="sym">${o.simulated ? "📝" : "📤"} ${o.channel}: ${(o.text || "").slice(0, 46)}</span>`
+      + `<span class="px">${o.status} · ${ts}</span>`;
+    ob.appendChild(li);
+  });
+  const dg = (p && p.digest) || {};
+  $("#digest").innerHTML = dg.pending
+    ? `<li class="mkt"><span class="sym">🌙 ${dg.pending} stashed overnight</span><span class="px">${dg.window ? "in window now" : "delivered on ask"}</span></li>`
+    : "";
+  const br = (p && p.browser) || {}, bel = $("#browserstate");
+  bel.className = "";
+  bel.textContent = br.ok ? `Browser: ${br.engine || "playwright"}`
+    : `Browser: ${br.reason || "unavailable"} — plain-text reads, labelled.`;
+}
+async function refreshPush() {
+  try {
+    const [push, digest, browser] = await Promise.all([
+      fetch("/api/push").then((r) => r.json()),
+      fetch("/api/digest").then((r) => r.json()),
+      fetch("/api/browser").then((r) => r.json()),
+    ]);
+    renderPush({ status: push.status, outbox: push.outbox, digest, browser });
+  } catch (e) { /* core still waking */ }
+}
 function renderSelf(st) {
   const el = $("#selfstats"), rl = $("#selfrules");
   if (!st) { el.innerHTML = '<li class="empty">Self-engine off.</li>'; return; }
@@ -362,6 +397,25 @@ $("#clear-facts").onclick = async () => {
   refreshLearned(); toast("Memories cleared.");
 };
 
+$("#digest-show").onclick = async () => {
+  try {
+    const r = await (await fetch("/api/digest/deliver", { method: "POST" })).json();
+    toast(r.report || "Nothing stashed overnight.");
+    refreshPush();
+  } catch (e) { toast("Digest unavailable."); }
+};
+$("#push-test").onclick = async () => {
+  try {
+    const r = await (await fetch("/api/push/test", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}) })).json();
+    const one = (r.pushed && r.pushed[0]) || {};
+    toast(`${one.channel || "push"}: ${one.status || "?"}`);
+    refreshPush();
+  } catch (e) { toast("Push test failed."); }
+};
+setInterval(refreshPush, 30000);
+
 /* ---------------- proactive + prep banners ---------------- */
 let pendingAction = null;
 function showSuggestion(text, action) {
@@ -470,6 +524,7 @@ function handle(m) {
       renderSelf(m.self);
       renderTasks(m.tasks || []);
       renderWebW(m.webwatches || []);
+      renderPush({ status: m.push, outbox: m.push_outbox, digest: m.digest, browser: m.browser });
       break;
     case "markets": renderMarkets(m); break;
     case "home": renderHome(m); break;
@@ -477,6 +532,7 @@ function handle(m) {
     case "self": renderSelf(m); break;
     case "tasks": renderTasks(m.tasks); break;
     case "webwatches": renderWebW(m.watches); break;
+    case "digest": refreshPush(); break;
     case "state": setState(m.state); break;
     case "level": currentLevel = m.value; break;
     case "user": userLine.textContent = m.text; break;

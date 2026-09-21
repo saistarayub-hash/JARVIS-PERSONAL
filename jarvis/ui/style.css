@@ -149,3 +149,8 @@ button { cursor: pointer; }
   #panel { display: none; }
   #reply-line { font-size: 15px; }
 }
+
+/* v9: push & overnight panel */
+.rowbtns { display: flex; gap: 6px; margin: 6px 0 2px; }
+#pushstate, #browserstate { font-size: 11px; opacity: .8; margin: 2px 0; }
+#digest:empty { display: none; }

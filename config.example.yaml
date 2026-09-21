@@ -106,3 +106,29 @@ jarvis:
 
   memory:
     db: data/memory.db
+
+  # v9 — push bridges (Telegram / email). Empty = nothing leaves this machine;
+  # every message is honestly logged to the outbox instead of being faked.
+  push:
+    mode: alerts            # alerts | all | off
+    telegram:
+      bot_token: ""         # or env JARVIS_TELEGRAM_TOKEN
+      chat_id: ""           # or env JARVIS_TELEGRAM_CHAT
+    mail:
+      smtp_host: ""
+      smtp_port: 587
+      username: ""
+      password: ""
+      mail_from: ""
+      mail_to: ""
+
+  # v9 — overnight digest: alerts in quiet_hours are stashed, not pushed.
+  digest:
+    enabled: true
+    quiet_hours: [23, 7]
+
+  # v9 — real headless Chromium via Playwright when installed; honest
+  # plain-text fallback otherwise.
+  browser:
+    enabled: true
+    timeout_s: 20

@@ -36,6 +36,8 @@ from .brain.music import MusicBridge
 from .brain.self import SelfEngine
 from .brain.tasks import TaskEngine
 from .brain.webwatch import WebWatchEngine
+from .brain.push import PushBridge
+from .brain.browser import BrowserEngine
 
 log = logging.getLogger("jarvis")
 
@@ -59,9 +61,12 @@ class Jarvis:
         self.music = MusicBridge(demo=self.demo, broadcast=self.broadcast)
         set_bridges(self.home, self.music, self)
         self.self_engine = SelfEngine(self.memory, cfg,
-                                      broadcast=self.broadcast)
-        self.tasks = TaskEngine(self.memory, broadcast=self.broadcast)
-        self.webwatch = WebWatchEngine(self.memory, broadcast=self.broadcast)
+                                      broadcast=self.announce)
+        self.tasks = TaskEngine(self.memory, broadcast=self.announce)
+        self.webwatch = WebWatchEngine(self.memory, broadcast=self.announce)
+        self.push = PushBridge(cfg.get("push"), self.memory, demo=self.demo)
+        self.browser = BrowserEngine(cfg.get("browser"), root=root,
+                                     demo=self.demo)
         self.learner = Learner(self.memory, cfg["learner"])
         provider = (cfg["llm"].get("provider") or "auto").lower()
         self.brain = LLMBrain(cfg) if provider != "none" else None
@@ -124,6 +129,11 @@ class Jarvis:
         p["self"] = self.self_engine.stats()
         p["tasks"] = self.memory.tasks_open()
         p["webwatches"] = self.memory.web_watches()
+        p["push"] = self.push.status()
+        p["push_outbox"] = self.memory.push_recent(6)
+        p["browser"] = self.browser.available()
+        p["digest"] = {"pending": self.memory.digest_pending_count(),
+                       "window": self._digest_window()}
         return p
 
     def attach(self, ws) -> None:
@@ -141,6 +151,59 @@ class Jarvis:
                 asyncio.run_coroutine_threadsafe(ws.send_json(payload), self._loop)
             except Exception:
                 self.detach(ws)
+
+    # ================= v9: announce routing (digest + push) =================
+    def _digest_window(self) -> bool:
+        """True during the overnight window when alerts are stashed, not pushed."""
+        d = self.cfg.get("digest") or {}
+        if not d.get("enabled", True):
+            return False
+        hrs = d.get("quiet_hours") or [23, 7]
+        try:
+            start, end = int(hrs[0]), int(hrs[1])
+        except (TypeError, ValueError):
+            return False
+        h = datetime.now().hour
+        if start > end:                      # wraps midnight, e.g. 23 -> 7
+            return h >= start or h < end
+        return start <= h < end
+
+    def announce(self, payload: dict) -> None:
+        """Central proactive channel used by the self/task/webwatch engines.
+        Overnight: stash into the digest instead of waking the UI (alerts
+        still reach configured push channels). Otherwise: fan out + route
+        through the push bridge per its mode."""
+        try:
+            t = payload.get("type")
+            text = (payload.get("text") or "").strip()
+            if t in ("announce", "alert") and text:
+                if self._quiet() or self._digest_window():
+                    day = datetime.now().strftime("%Y-%m-%d")
+                    self.memory.digest_add(day, t, text)
+                    self.broadcast({"type": "digest",
+                                    "pending": self.memory.digest_pending_count()})
+                    if t == "alert":
+                        self.push.route(text, alert=True)
+                    return
+                self.push.route(text, alert=(t == "alert"))
+        except Exception:  # noqa: BLE001 — routing must never kill an alert
+            log.exception("announce routing failed")
+        self.broadcast(payload)
+
+    def digest_report(self, deliver: bool = True) -> str:
+        items = self.memory.digest_pending()
+        if not items:
+            return ("Nothing stashed overnight — it was a quiet night, "
+                    "sir. No alerts, no page changes, nothing due.")
+        lines = [f"Overnight digest — {len(items)} item"
+                 f"{'s' if len(items) != 1 else ''} while you were away:"]
+        for it in items:
+            when = time.strftime("%H:%M", time.localtime(it["ts"]))
+            lines.append(f"[{when}] {it['text']}")
+        if deliver:
+            self.memory.digest_deliver()
+            lines.append("Marked as delivered.")
+        return " ".join(lines)
 
     def set_state(self, name: str) -> None:
         self.state_name = name
@@ -618,6 +681,12 @@ class Jarvis:
         period = "morning" if h < 12 else "afternoon" if h < 18 else "evening"
         lines = [f"Here's your {period} brief, {name}. "
                  f"It's {now:%H:%M} on {now:%A, %d %B}."]
+        pending = self.memory.digest_pending_count()
+        if pending:
+            sfx = "s" if pending != 1 else ""
+            lines.append(f"Overnight I stashed {pending} alert{sfx} instead of "
+                         "waking you — say \"what did I miss\" to hear "
+                         f"{'them' if pending != 1 else 'it'}.")
         today = self.memory.activity_today(3)
         if today:
             top = today[0]

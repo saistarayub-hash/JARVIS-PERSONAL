@@ -22,7 +22,7 @@ HELP_TEXT = (
     "with Sam at 3 pm', 'cancel design sync', 'import my calendar from "
     "work.ics'. Fleet: 'status of all devices', 'run disk on web-01', "
     "'watch web-01' (I'll alert you if it drops), 'screenshot my-mac' (what's "
-    "on its screen). Tasks and web: 'remind me to X in 20 minutes', 'my tasks', 'done 3', 'watch <url> for <keyword>' (page-change alerts). Web and markets: 'what's the news', 'how much is 100 usd "
+    "on its screen). Tasks and web: 'remind me to X in 20 minutes', 'my tasks', 'done 3', 'watch <url> for <keyword>' (page-change alerts). Overnight and push: alerts stash into a digest while you sleep — 'what did I miss'; 'send <message> to telegram', 'push status'; 'render <url> in browser' (real Chromium when Playwright is installed, honest plain-text otherwise). Web and markets: 'what's the news', 'how much is 100 usd "
     "in zar', 'eurusd', 'bitcoin price', 'markets', 'time in tokyo', and "
     "'watch usdzar above 19' - a real alert fires the moment it crosses. "
     "Prep: 'brief me', 'prep work', 'take care of work' (background, with a "
@@ -130,6 +130,16 @@ RE_WEBWATCH = (r"^(?:watch|monitor) "
                r"(?:\s+for\s+(.+?))?"
                r"(?:\s+every\s+(\d+)\s*(minutes?|mins?|seconds?|secs?))?$")
 RE_WEBWATCHES = r"^(?:my )?web watches$|^stop watching (?:the )?(\S+)$"
+RE_BROWSER = (r"^(?:render|browse)\s+(\S+)\s*$|"
+              r"^(?:render|browse|open|show|load)\s+(\S+)\s+in\s+(?:the\s+|a\s+)?browser\s*$|"
+              r"^browser\s+(\S+)\s*$")
+RE_PUSH_SEND = r"^(?:send|push)\s+(.+?)\s+to\s+(telegram|mail|email|my phone)$"
+RE_PUSH_STATUS = (r"^(?:push (?:status|channels|bridge)|what channels can you "
+                  r"reach me on|how (?:do|can) you reach me)$")
+RE_DIGEST = (r"^(?:what did i miss(?: overnight)?|did i miss anything|"
+             r"anything overnight|overnight (?:digest|report|summary|news)|"
+             r"(?:nightly|night) (?:digest|report)|digest(?: report)?|"
+             r"any alerts overnight|what happened overnight)$")
 RE_CAL_ADD = r"^add (?:a |an |my )?(meeting|call|appointment|deadline|event) (.+)$"
 RE_CAL_CANCEL = r"^cancel (?:the )?(?:meeting |call |appointment |deadline |task |event )?(.+)$"
 RE_CAL_IMPORT = r"^import (?:my )?(?:calendar|events|ics) from (\S+\.ics)$"
@@ -191,6 +201,21 @@ def _match(original: str, jarvis=None, _depth: int = 0) -> Optional[Tuple[str, D
         return ("webwatch", {"url": m.group(1),
                              "keyword": (m.group(2) or "").strip(),
                              "every_s": secs})
+    m = re.match(RE_BROWSER, t)
+    if m:
+        url = (m.group(1) or m.group(2) or m.group(3)).strip()
+        return ("browser", {"url": url})
+    m = re.match(RE_PUSH_SEND, t)
+    if m:
+        ch = m.group(2)
+        ch = "mail" if ch in ("mail", "email") else "telegram"
+        return ("push_send",
+                {"text": _extract(RE_PUSH_SEND, orig, 1) or m.group(1),
+                 "channel": ch})
+    if re.match(RE_PUSH_STATUS, t):
+        return ("push_status", {})
+    if re.match(RE_DIGEST, t):
+        return ("digest", {})
     m = re.search(r"https?://\S+", t)
     if m and len(t) < 300:
         return ("read", {"url": m.group(0)})
@@ -1014,6 +1039,71 @@ def rule_respond(text: str, cfg: dict, memory, jarvis=None) -> Tuple[str, str, s
                     f"I wasn't watching anything matching '{args['stop']}'.",
                     "webwatches", "", args["stop"])
         return (eng.list_text(), "webwatches", "", "")
+
+    if intent == "browser":
+        eng = getattr(jarvis, "browser", None)
+        if eng is None:
+            return ("The browser engine isn't wired up.", "browser", "", "")
+        url = args["url"]
+        if not re.match(r"^https?://", url):
+            url = "https://" + url
+        res = eng.open_page(url)
+        if res.get("rendered"):
+            shot = (f" Screenshot saved: {res['screenshot']}."
+                    if res.get("screenshot") else "")
+            body = (res.get("text") or "")[:500]
+            return (f"Rendered {url} in a real browser, JS included — "
+                    f"'{res.get('title', '')}'.{shot} Text starts: {body}",
+                    "browser", "", url)
+        if res.get("ok"):
+            body = (res.get("text") or "")[:500]
+            return (f"I can't render that in a real browser — "
+                    f"{res.get('reason', 'no browser engine here')}. So this is "
+                    f"the plain-text read, JS NOT rendered: "
+                    f"'{res.get('title', '')}' — {body}",
+                    "browser", "", url)
+        return (f"I couldn't open {url}: "
+                f"{res.get('error') or res.get('reason') or 'unknown problem'} "
+                "— and I won't pretend otherwise.", "browser", "", url)
+
+    if intent == "push_send":
+        pb = getattr(jarvis, "push", None)
+        if pb is None:
+            return ("The push bridge isn't wired up.", "push_send", "", "")
+        results = pb.send(args["text"], [args.get("channel") or "telegram"])
+        real = [r for r in results
+                if r["status"] == "sent" and not r["simulated"]]
+        failed = [r for r in results
+                  if not r["simulated"] and r["status"] != "sent"]
+        if real:
+            return (f"Sent to {', '.join(r['channel'] for r in real)}.",
+                    "push_send", "", args["text"])
+        if failed:
+            return (f"I tried, but the send failed: {failed[0]['status']}. "
+                    "It's logged in the outbox so you can see exactly what "
+                    "happened.", "push_send", "", args["text"])
+        return ("Nothing left this machine — " + results[0]["status"] + ". "
+                "It's logged in the outbox panel. Add push.telegram.bot_token "
+                "and chat_id to config.yaml (or set JARVIS_TELEGRAM_TOKEN / "
+                "JARVIS_TELEGRAM_CHAT) and I'll really deliver these.",
+                "push_send", "", args["text"])
+
+    if intent == "push_status":
+        pb = getattr(jarvis, "push", None)
+        if pb is None:
+            return ("The push bridge isn't wired up.", "push_status", "", "")
+        st = pb.status()
+        tg = "ready" if st["telegram"] else "not configured (no bot_token/chat_id)"
+        ml = "ready" if st["mail"] else "not configured (no smtp host/recipient)"
+        return (f"Push channels — telegram: {tg}; email: {ml}. Mode: "
+                f"{st['mode']} (only alerts auto-push in this mode). Until one "
+                "is configured, everything stays on this machine, honestly "
+                "logged in the outbox.", "push_status", "", "")
+
+    if intent == "digest":
+        if jarvis is None:
+            return ("The digest needs the core brain.", "digest", "", "")
+        return (jarvis.digest_report(), "digest", "", "")
 
     if intent == "stop":
         return ("Standing by.", "stop", "", "")

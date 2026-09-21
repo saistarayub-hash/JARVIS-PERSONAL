@@ -112,3 +112,26 @@ def analyze_screen(device: str, question: str = "") -> dict:
     if j is None:
         raise RuntimeError("Core isn't wired up.")
     return j.see(device, question or "Describe what is on this screen.")
+
+# ---------------------------------------------------------------- v9: push & browser
+@tool("push_send", "Send a message to the user's phone (Telegram) or email. "
+      "Without configured credentials it logs an honest simulated outbox entry.",
+      {"text": "string: message to send",
+       "channel": "optional string: telegram or mail"})
+def push_send(text: str, channel: str | None = None) -> dict:
+    jarvis = _shared.get("jarvis")
+    if jarvis is None or getattr(jarvis, "push", None) is None:
+        raise RuntimeError("Push bridge isn't wired up.")
+    chans = [channel] if channel else None
+    return {"pushed": jarvis.push.send(str(text), chans)}
+
+
+@tool("browser_open", "Open a URL in a real headless browser (JS rendered, "
+      "screenshot saved) when Playwright is installed; otherwise a plain-text "
+      "fetch, clearly labelled 'JS not rendered'. Never fakes a browser.",
+      {"url": "string: http(s) URL to open"})
+def browser_open(url: str) -> dict:
+    jarvis = _shared.get("jarvis")
+    if jarvis is None or getattr(jarvis, "browser", None) is None:
+        raise RuntimeError("Browser engine isn't wired up.")
+    return jarvis.browser.open_page(str(url))

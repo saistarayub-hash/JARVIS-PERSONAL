@@ -88,6 +88,49 @@ def create_app(cfg: dict) -> FastAPI:
     async def _webwatches():
         return {"watches": jarvis.memory.web_watches()}
 
+    # ---------------- v9: push outbox, digest, browser ----------------
+    @app.get("/api/push")
+    async def _push():
+        return {"status": jarvis.push.status(),
+                "outbox": jarvis.memory.push_recent(8)}
+
+    @app.post("/api/push/test")
+    async def _push_test(request: Request):
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        text = str(body.get("text") or "JARVIS push test — if you can read "
+                                      "this, the bridge works.")
+        channel = body.get("channel")  # None -> every configured channel
+        chans = [channel] if channel else None
+        results = await asyncio.to_thread(jarvis.push.send, text, chans)
+        return {"ok": True, "pushed": results}
+
+    @app.get("/api/digest")
+    async def _digest():
+        return {"pending": jarvis.memory.digest_pending(),
+                "count": jarvis.memory.digest_pending_count(),
+                "window": jarvis._digest_window()}
+
+    @app.post("/api/digest/deliver")
+    async def _digest_deliver():
+        report = await asyncio.to_thread(jarvis.digest_report, True)
+        return {"ok": True, "report": report}
+
+    @app.get("/api/browser")
+    async def _browser():
+        av = jarvis.browser.available()
+        shots = []
+        try:
+            d = jarvis.browser.shots_dir
+            if d.exists():
+                shots = sorted((p.name for p in d.glob("*.png")),
+                               reverse=True)[:6]
+        except Exception:  # noqa: BLE001
+            pass
+        return {**av, "recent_shots": shots}
+
     @app.get("/demo/page")
     async def _demo_page():
         """A local page that flips state every 2 minutes, so web-watchers are

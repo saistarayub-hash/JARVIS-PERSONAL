@@ -93,6 +93,17 @@ sees what you're doing across all your machines, and gets itself ready
 - ✨ **Hologram UI** — animated ring + **Command Center** panel: fleet health,
   today's activity, preps, memories, habits.
 
+- 📤 **Reach you anywhere — push, digest, browser** — Telegram and email
+  bridges: `send <message> to telegram`, `push status`; with no credentials
+  configured every message is logged to an honest outbox (nothing is ever
+  pretended-sent). Alert routing respects `push.mode` (alerts/all/off). At
+  night (`digest.quiet_hours`, default 23→7) proactive alerts are stashed
+  into a **digest** instead of waking the UI — `what did I miss` reads them
+  out and marks them delivered; the morning brief mentions what's waiting.
+  And `render <url> in browser` drives a real headless Chromium (Playwright:
+  JS executed, screenshot saved to `data/shots/`) when installed — otherwise
+  it degrades to a plain-text read, always labelled "JS not rendered", never
+  faking a browser.
 ## Quickstart (2 minutes, zero API keys)
 
 ```bash
@@ -118,6 +129,9 @@ what am i looking at  ← screen capture + vision model when connected
 remind me to stretch in 20 minutes
 my tasks              ← open list; "done 3" ticks one off
 watch <url> for launch every 30 seconds   ← page-change/keyword alerts
+what did I miss         ← overnight digest (alerts stashed while you slept)
+send dinner plans to telegram  ← real when configured, honest outbox if not
+render <url> in browser        ← real Chromium when Playwright installed
 i love coffee         ← auto-learned, no "remember" needed
 i have a meeting with Priya at 4 pm   ← lands on the calendar, autoprepped
 meetings today
@@ -297,7 +311,8 @@ ever connects *out* to your core.
 
 ## Roadmap ideas
 
-Calendar/timer awareness (auto meeting-prep routine) · music player control
-(MPRIS/AppleScript) · screen capture + LLM vision ("what's on my screen?") ·
-Home Assistant bridge for smart-home + phone notifications · per-weekday habit
-reports · multi-user "who's asking" detection.
+Per-weekday habit reports · multi-user "who's asking" detection · fill in
+`push.telegram` / `push.mail` credentials to make sends leave the machine ·
+`pip install playwright && playwright install chromium` to upgrade web reads
+into real browser renders · browser-automation tools for logins/forms via the
+same Playwright engine.

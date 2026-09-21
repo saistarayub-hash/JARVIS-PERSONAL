@@ -137,6 +137,12 @@ class Memory:
                     fired INTEGER DEFAULT 0,
                     created REAL
                 );
+                CREATE TABLE IF NOT EXISTS digest (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, day TEXT,
+                    kind TEXT, text TEXT, delivered INTEGER DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS push_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, channel TEXT,
+                    text TEXT, status TEXT, simulated INTEGER DEFAULT 1);
                 CREATE TABLE IF NOT EXISTS web_watches(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     url TEXT NOT NULL,
@@ -688,3 +694,40 @@ class Memory:
                 "last_check = ?, note = ? WHERE id = ?",
                 (last_hash, kw_seen, time.time(), note, wid))
             self.db.commit()
+
+    # ---------- v9: digest & push outbox ----------
+
+    def digest_add(self, day: str, kind: str, text: str):
+        self.db.execute("insert into digest (ts, day, kind, text) values (?,?,?,?)",
+                           (time.time(), day, kind, text))
+        self.db.commit()
+
+    def digest_pending(self) -> List[Dict[str, Any]]:
+        rows = self.db.execute(
+            "select ts, kind, text from digest where delivered = 0 order by ts").fetchall()
+        return [dict(r) for r in rows]
+
+    def digest_deliver(self) -> int:
+        n = self.digest_pending_count()
+        if n:
+            self.db.execute("update digest set delivered = 1 where delivered = 0")
+            self.db.commit()
+        return n
+
+    def digest_pending_count(self) -> int:
+        r = self.db.execute("select count(*) from digest where delivered = 0").fetchone()
+        return r[0] if r else 0
+
+    def push_log(self, channel: str, text: str, status: str, simulated: bool = True):
+        self.db.execute(
+            "insert into push_log (ts, channel, text, status, simulated) values (?,?,?,?,?)",
+            (time.time(), channel, text, status, int(simulated)))
+        self.db.commit()
+
+    def push_recent(self, limit: int = 6) -> List[Dict[str, Any]]:
+        rows = self.db.execute(
+            "select ts, channel, text, status, simulated from push_log "
+            "order by id desc limit ?", (limit,)).fetchall()
+        out = [dict(r) for r in rows]
+        out.reverse()
+        return out
