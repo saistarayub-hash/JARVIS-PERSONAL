@@ -119,13 +119,23 @@ sees what you're doing across all your machines, and gets itself ready
   never a silent checkbox.
 ## Run it now — one command
 
-**Linux / macOS / Termux** (real deepseek brain included — grab a free key at
-tokenharbor.ai, @BotFather of LLM gateways):
+**Linux / macOS** — after a one-time key save, no secret ever touches your
+shell history again:
 
 ```bash
-JARVIS_KEY=<your-token-harbor-key> bash -c 'git clone -b main \
-  https://github.com/saistarayub-hash/JARVIS-PERSONAL jarvis && cd jarvis && ./start.sh --demo'
+# once: stash the free Token Harbor key (prompted, hidden input)
+git clone --depth 1 https://github.com/saistarayub-hash/JARVIS-PERSONAL jarvis \
+  && bash jarvis/scripts/save-key.sh
+
+# every day after — that's the whole install/upgrade/run cycle:
+bash <(curl -sL https://raw.githubusercontent.com/saistarayub-hash/JARVIS-PERSONAL/main/start.sh) --demo
 ```
+
+`start.sh` finds the key in `~/.config/jarvis/token` (or the macOS Keychain),
+clones or fast-forwards the repo, builds the venv, installs deps, live-pings
+the provider and says out loud what happened, then starts the UI. Add
+`--service` once to get autostart + the `jarvis` command everywhere. No key?
+You're on the rule brain — fully capable, and it will never pretend otherwise.
 
 That clones, builds a venv, installs deps, writes the key into a local
 config.yaml, live-pings the provider (and *says* if it can't reach it), then
@@ -135,7 +145,10 @@ pretend otherwise. Afterwards `./start.sh --service` installs autostart +
 the `jarvis` command (systemd/launchd/Termux-boot).
 
 **Windows:** `powershell -ExecutionPolicy Bypass -File start.ps1`
-**Phone:** inside Termux — `bash scripts/termux-agent.sh ws://<laptop-ip>:8595 <fleet-token>`
+**Phone:** run `bash scripts/agent-link.sh` on the laptop — it prints a
+complete curl command (LAN IP + fleet token filled in) to paste into Termux;
+it self-installs, joins the fleet, and wires Termux:Boot to rejoin after
+every reboot.
 
 ## Quickstart (2 minutes, zero API keys)
 

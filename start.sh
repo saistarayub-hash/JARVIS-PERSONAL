@@ -12,6 +12,10 @@
 # Env: JARVIS_DIR (default ~/jarvis) · JARVIS_REPO · JARVIS_BRANCH (default main)
 set -euo pipefail
 
+say() { printf '\033[36mjarvis-setup:\033[0m %s\n' "$*"; }
+die() { printf '\033[31mfailed:\033[0m %s\n' "$*" >&2; exit 1; }
+
+
 BRANCH="${JARVIS_BRANCH:-main}"
 REPO="${JARVIS_REPO:-https://github.com/saistarayub-hash/JARVIS-PERSONAL}"
 DIR="${JARVIS_DIR:-$HOME/jarvis}"
@@ -21,9 +25,6 @@ ARGS=()
 for a in "$@"; do
   [ "$a" = "--service" ] && SERVICE=1 || ARGS+=("$a")
 done
-
-say() { printf '\033[36mjarvis-setup:\033[0m %s\n' "$*"; }
-die() { printf '\033[31mfailed:\033[0m %s\n' "$*" >&2; exit 1; }
 
 command -v git >/dev/null || die "git isn't installed — install it and re-run"
 PYBIN="$(command -v python3 || true)"
