@@ -20,6 +20,15 @@ BRANCH="${JARVIS_BRANCH:-main}"
 REPO="${JARVIS_REPO:-https://github.com/saistarayub-hash/JARVIS-PERSONAL}"
 DIR="${JARVIS_DIR:-$HOME/jarvis}"
 KEY="${JARVIS_KEY:-}"
+KEYFILE="${XDG_CONFIG_HOME:-$HOME/.config}/jarvis/token"
+if [ -z "$KEY" ] && [ -r "$KEYFILE" ]; then
+  KEY="$(tr -d '[:space:]' < "$KEYFILE" | head -c 400)"
+  [ -n "$KEY" ] && say "brain key: using $KEYFILE"
+fi
+if [ -z "$KEY" ] && command -v security >/dev/null 2>&1; then  # macOS Keychain
+  KEY="$(security find-generic-password -s jarvis-brain-key -w 2>/dev/null || true)"
+  [ -n "$KEY" ] && say "brain key: found in macOS Keychain"
+fi
 SERVICE=0
 ARGS=()
 for a in "$@"; do
@@ -58,8 +67,13 @@ say "installing dependencies (fastapi, uvicorn, websockets, …)"
 if [ -z "$KEY" ] && [ ! -f .no_key_prompt ]; then
   if [ -t 0 ]; then
     printf 'Paste a Token Harbor key for the real LLM brain (leave blank to stay on the rule brain, or press it again to skip this prompt next time): '
-    read -r KEY || KEY=""
+    read -rs KEY || KEY=""   # hidden: no key in shell history
     [ "$KEY" = "skip" ] && touch .no_key_prompt
+    if [ -n "$KEY" ] && [ "$KEY" != "skip" ]; then
+      mkdir -p "$(dirname "$KEYFILE")" 2>/dev/null \
+        && (umask 077; printf '%s\n' "$KEY" > "$KEYFILE") \
+        && say "key saved to $KEYFILE — never asked again"
+    fi
   fi
 fi
 if [ -n "$KEY" ]; then
