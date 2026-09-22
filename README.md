@@ -256,6 +256,14 @@ No Piper? Auto-fallback to espeak-ng or pyttsx3.
 
 ## Make it conversational (the LLM brain)
 
+*Zero-cost route:* a Token Harbor key (free tier on `deepseek-v4.1-flash:free`)
+in `config.yaml` → `llm.provider: openai`, `openai_base_url:
+https://tokenharbor.ai/v1` — inline `openai_api_key` or, safer, an
+`OPENAI_API_KEY` env var (env wins). Without network or with a dead endpoint
+every turn falls back to the rule brain in ~0 ms — the log says so, and you
+never wait on a dead socket.
+
+
 The rule brain covers the classics; an LLM makes it conversational and lets it
 decide which tool to use on its own (function calling over ALL tools —
 including fleet + routines).

@@ -70,10 +70,21 @@ class LLMBrain:
         self.model: Optional[str] = None
         self._resolve()
 
+    def _key(self) -> str:
+        """API key: env var named by openai_api_key_env wins; an inline
+        `openai_api_key` in config.yaml is the fallback (config.yaml is
+        gitignored by this repo — still prefer the env var)."""
+        llm = self.llm_cfg
+        key = os.environ.get(llm.get("openai_api_key_env",
+                                     "OPENAI_API_KEY"), "").strip()
+        if not key:
+            key = str(llm.get("openai_api_key") or "").strip()
+        return key
+
     def _resolve(self) -> None:
         llm = self.llm_cfg
         provider = (llm.get("provider") or "auto").lower()
-        key = os.environ.get(llm.get("openai_api_key_env", "OPENAI_API_KEY"), "").strip()
+        key = self._key()
         if provider in ("auto", "openai") and key:
             self.base_url = llm.get("openai_base_url",
                                     "https://api.openai.com/v1").rstrip("/")
@@ -99,8 +110,7 @@ class LLMBrain:
 
     def _headers(self) -> dict:
         h = {"Content-Type": "application/json"}
-        key = os.environ.get(self.llm_cfg.get("openai_api_key_env",
-                                              "OPENAI_API_KEY"), "").strip()
+        key = self._key()
         if key:
             h["Authorization"] = f"Bearer {key}"
         return h
