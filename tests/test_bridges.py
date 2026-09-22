@@ -88,7 +88,7 @@ class TestManifestAndConvo(unittest.TestCase):
         from jarvis.main import Jarvis
         cfg = load_config("config.yaml")
         cfg["root"] = tempfile.mkdtemp()
-        cfg["fleet"]["enabled"] = False
+        cfg.setdefault("fleet", {})["enabled"] = False
         j = Jarvis(cfg)
         r = j.see("web-01")
         self.assertFalse(r["ok"])
