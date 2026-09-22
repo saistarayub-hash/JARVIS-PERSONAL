@@ -4,7 +4,8 @@ A fully local-first, **self-learning** AI butler that lives on your laptop,
 sees what you're doing across all your machines, and gets itself ready
 *before* you ask. The "JARVIS" from the Instagram vids — minus the arc reactor.
 
--  **Learns what you need and when** — every request and every app session is
+- **Standalone Executables** — packaged single-file binaries for Linux (`jarvis-linux-x86_64`), Windows (`jarvis-windows-amd64.exe`), and macOS (`jarvis-macos-x86_64`) built automatically via PyInstaller and published on GitHub Releases when tag `v*` is pushed. Build locally with `python scripts/build_standalone.py`.
+- **Learns what you need and when** — every request and every app session is
   logged, habits are detected per day-of-week + hour (recency-weighted, so it
   adapts when your routine changes), and JARVIS *proactively* preps things
   when it's "about that time" — with a **PREP IT** button.

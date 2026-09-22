@@ -22,7 +22,7 @@ jobs:
       - name: unit suites
         run: |
           for t in test_tasks test_self test_push test_integration test_llmkey \
-                   test_bridges test_providers; do
+                   test_bridges test_providers test_standalone; do
             echo "::group::$t"
             python -u tests/$t.py
             echo "::endgroup::"

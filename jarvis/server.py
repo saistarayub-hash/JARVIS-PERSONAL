@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import time
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -10,7 +11,10 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from .main import Jarvis
 
-UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    UI_DIR = os.path.join(sys._MEIPASS, "jarvis", "ui")
+else:
+    UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
 
 
 def create_app(cfg: dict) -> FastAPI:
