@@ -117,6 +117,26 @@ sees what you're doing across all your machines, and gets itself ready
   — it removes exactly what it added. If the machine refuses a service
   (e.g. no user bus in a container), the report says *"failed: ..."* —
   never a silent checkbox.
+## Run it now — one command
+
+**Linux / macOS / Termux** (real deepseek brain included — grab a free key at
+tokenharbor.ai, @BotFather of LLM gateways):
+
+```bash
+JARVIS_KEY=<your-token-harbor-key> bash -c 'git clone -b main \
+  https://github.com/saistarayub-hash/JARVIS-PERSONAL jarvis && cd jarvis && ./start.sh --demo'
+```
+
+That clones, builds a venv, installs deps, writes the key into a local
+config.yaml, live-pings the provider (and *says* if it can't reach it), then
+starts the hologram UI at http://127.0.0.1:8595. Leave `JARVIS_KEY` out and
+you're on the rule brain — fully capable, zero cost, and it will never
+pretend otherwise. Afterwards `./start.sh --service` installs autostart +
+the `jarvis` command (systemd/launchd/Termux-boot).
+
+**Windows:** `powershell -ExecutionPolicy Bypass -File start.ps1`
+**Phone:** inside Termux — `bash scripts/termux-agent.sh ws://<laptop-ip>:8595 <fleet-token>`
+
 ## Quickstart (2 minutes, zero API keys)
 
 ```bash
