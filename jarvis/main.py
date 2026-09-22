@@ -156,7 +156,8 @@ class Jarvis:
     def _digest_window(self) -> bool:
         """True during the overnight window when alerts are stashed, not pushed."""
         d = self.cfg.get("digest") or {}
-        if not d.get("enabled", True):
+        if not d.get("enabled", True) or os.environ.get(
+                "JARVIS_DIGEST_DISABLE") == "1":
             return False
         hrs = d.get("quiet_hours") or [23, 7]
         try:
@@ -186,9 +187,40 @@ class Jarvis:
                         self.push.route(text, alert=True)
                     return
                 self.push.route(text, alert=(t == "alert"))
+                if t == "alert" and not self._quiet():
+                    self._desktop_notify(text)
         except Exception:  # noqa: BLE001 — routing must never kill an alert
             log.exception("announce routing failed")
         self.broadcast(payload)
+
+    def _desktop_notify_wanted(self) -> bool:
+        mode = str((self.cfg.get("integration") or {}).get("notify",
+                                                           "auto")).lower()
+        if mode in ("off", "false", "none"):
+            return False
+        if mode in ("on", "true", "yes"):
+            return True
+        import shutil
+        return bool(shutil.which("notify-send"))
+
+    def _desktop_notify(self, text: str) -> None:
+        """Best-effort OS notification for red alerts — integration means the
+        machine itself pings you, not just the browser tab."""
+        try:
+            import shutil
+            import subprocess
+            import sys
+            if shutil.which("notify-send"):
+                subprocess.run(["notify-send", "-u", "critical", "JARVIS",
+                                text[:300]], timeout=6, capture_output=True)
+            elif sys.platform == "darwin":
+                safe = text.replace("\\", "").replace('"', "'")[:300]
+                subprocess.run(
+                    ["osascript", "-e",
+                     f'display notification "{safe}" with title "JARVIS"'],
+                    timeout=6, capture_output=True)
+        except Exception:  # noqa: BLE001 — a missing notifier must not kill alerts
+            pass
 
     def digest_report(self, deliver: bool = True) -> str:
         items = self.memory.digest_pending()

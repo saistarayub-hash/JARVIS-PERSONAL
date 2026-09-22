@@ -104,6 +104,19 @@ sees what you're doing across all your machines, and gets itself ready
   JS executed, screenshot saved to `data/shots/`) when installed — otherwise
   it degrades to a plain-text read, always labelled "JS not rendered", never
   faking a browser.
+
+- 🏠 **Integrated, not an app** — one command weaves JARVIS into the machine:
+  `python3 -m jarvis.cli install` writes a real **systemd user service**
+  (Linux), **launchd plist** (macOS), autostart `.desktop`, Windows startup
+  `.bat`, or a **Termux boot script** (phone agent survives reboots) — plus a
+  `jarvis` command in `~/.local/bin`, so from any terminal, any time:
+  `jarvis brief me`, `jarvis remind me to stretch in 20 minutes`. The core
+  runs `--headless` (no browser tab hostage-taking); red alerts also fire
+  `notify-send`/`osascript` desktop notifications when the OS has them
+  (`integration.notify: auto|on|off`). Uninstall is complete and marker-scoped
+  — it removes exactly what it added. If the machine refuses a service
+  (e.g. no user bus in a container), the report says *"failed: ..."* —
+  never a silent checkbox.
 ## Quickstart (2 minutes, zero API keys)
 
 ```bash
@@ -132,6 +145,8 @@ watch <url> for launch every 30 seconds   ← page-change/keyword alerts
 what did I miss         ← overnight digest (alerts stashed while you slept)
 send dinner plans to telegram  ← real when configured, honest outbox if not
 render <url> in browser        ← real Chromium when Playwright installed
+jarvis brief me         ← the SAME brain from any shell (after `jarvis install`)
+python3 -m jarvis.cli install --dry   ← see exactly what would be written
 i love coffee         ← auto-learned, no "remember" needed
 i have a meeting with Priya at 4 pm   ← lands on the calendar, autoprepped
 meetings today
@@ -311,8 +326,9 @@ ever connects *out* to your core.
 
 ## Roadmap ideas
 
-Per-weekday habit reports · multi-user "who's asking" detection · fill in
-`push.telegram` / `push.mail` credentials to make sends leave the machine ·
+Multi-user "who's asking" detection · a global push-to-talk hotkey daemon
+over the CLI · per-weekday habit reports · fill in `push.telegram` /
+`push.mail` credentials to make sends leave the machine ·
 `pip install playwright && playwright install chromium` to upgrade web reads
 into real browser renders · browser-automation tools for logins/forms via the
 same Playwright engine.

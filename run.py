@@ -35,6 +35,9 @@ def main() -> None:
                     help="don't open the UI in a browser automatically")
     ap.add_argument("--demo", action="store_true",
                     help="join simulated fleet devices (web-01, phone) for demos")
+    ap.add_argument("--headless", action="store_true",
+                    help="never open a browser (service mode — the UI is still "
+                         "at http://<host>:<port> whenever you want it)")
     ap.add_argument("--host", default=None)
     ap.add_argument("--port", type=int, default=None)
     args = ap.parse_args()
@@ -66,7 +69,7 @@ def main() -> None:
             a.start()
         logging.getLogger("jarvis").info("demo fleet devices starting (web-01, phone)")
 
-    if not args.no_browser:
+    if not args.no_browser and not args.headless:
         url = f"http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}"
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 

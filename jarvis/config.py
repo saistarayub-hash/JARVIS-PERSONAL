@@ -36,6 +36,7 @@ DEFAULTS: Dict[str, Any] = {
     },
     "memory": {"db": "data/memory.db"},
     "learner": {"proactive": True, "min_uses": 2, "window_hours": 1},
+    "integration": {"notify": "auto"},  # auto | on | off (notify-send)
     "web": {"host": "127.0.0.1", "port": 8595},
 }
 

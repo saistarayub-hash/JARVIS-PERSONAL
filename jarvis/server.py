@@ -163,6 +163,22 @@ def create_app(cfg: dict) -> FastAPI:
     async def _clear_facts():
         return {"ok": True, "cleared": jarvis.memory.clear()}
 
+    @app.post("/api/command")
+    async def _command(request: Request):
+        """v10: run one utterance through the core from anywhere (CLI, scripts,
+        cron, other devices). Mirrors the websocket chat flow onto the UI."""
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        text = str(body.get("text") or "").strip()
+        if not text:
+            return {"ok": False, "reply": "No words, no orders, sir."}
+        jarvis.push_user_text(text)
+        result = await asyncio.to_thread(jarvis.handle, text)
+        jarvis.broadcast({"type": "reply", **result})
+        return {"ok": True, **result}
+
     @app.get("/api/screenshots/{fname}")
     async def _screenshot(fname: str):
         import os

@@ -129,6 +129,12 @@ jarvis:
 
   # v9 — real headless Chromium via Playwright when installed; honest
   # plain-text fallback otherwise.
+  # v10 — integration (autostart & desktop notifications). `jarvis install`
+  # wires run.py into systemd/launchd/autostart/Termux and drops a `jarvis`
+  # command in ~/.local/bin. notify: auto = desktop-ping for red alerts when
+  # notify-send exists; on/off to force.
+  integration:
+    notify: auto
   browser:
     enabled: true
     timeout_s: 20
