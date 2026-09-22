@@ -1,0 +1,8 @@
+# Core (chat mode) — everything JARVIS needs to think, act and show the UI.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+websockets>=12
+PyYAML>=6
+requests>=2.31
+ddgs>=9          # DuckDuckGo web search (no API key)
+psutil>=5.9      # laptop health stats

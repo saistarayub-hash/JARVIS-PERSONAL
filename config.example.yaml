@@ -1,0 +1,146 @@
+# JARVIS configuration — copy this file to config.yaml and edit.
+# Everything here is optional; missing keys use sensible defaults.
+jarvis:
+  user:
+    name: Boss            # what JARVIS calls you
+    default_city: London  # used for "weather" when you don't name a city
+
+  voice:
+    enabled: false        # true = wake word + mic + spoken replies
+                          # (needs: pip install -r requirements-voice.txt)
+    wake_word: hey jarvis
+    stt: faster-whisper
+    stt_model: base.en    # tiny.en | base.en | small.en (bigger = slower, better)
+    tts: piper            # piper | espeak | pyttsx3
+    piper_voice: en_GB-alan-medium
+    piper_model_dir: data/voices
+
+  llm:
+    provider: auto        # auto | openai | ollama | none
+    # OpenAI-compatible API (OpenAI, Groq, LM Studio, vLLM...)
+    openai_model: gpt-4o-mini
+    openai_base_url: https://api.openai.com/v1
+    openai_api_key_env: OPENAI_API_KEY   # name of the env var holding your key
+    # Fallback if you'd rather not set an env var: put the key inline below.
+    # config.yaml is gitignored, so it stays local — but the env var is safer.
+    openai_api_key: ""
+    # Zero-cost option that works out of the box:
+    #   openai_base_url: https://tokenharbor.ai/v1
+    #   openai_model: deepseek-v4.1-flash:free   (free tier, weekly limits)
+    # Local LLM via Ollama (no cloud at all)
+    ollama_base_url: http://localhost:11434/v1
+    ollama_model: llama3.2
+    temperature: 0.6
+    max_tokens: 300
+
+  # ---- FLEET: laptops, servers, phones — one JARVIS over all of them ----
+  fleet:
+    enabled: true
+    token: change-me-to-a-long-random-string   # shared secret; agents must match
+    auto_watch: true      # keep an eye on every device (alert on drop, announce on return)
+    timeout_s: 10
+    # On each device run:
+    #   python -m jarvis.fleet.agent --name web-01 --url ws://<core>:8595 \
+    #       --token <same> [--activity] [--allow shell:docker]
+
+  # ---- SMART HOME: Home Assistant when configured, labelled sim otherwise --
+  # home_assistant:
+  #   url: http://homeassistant.local:8123
+  #   token: eyJ0eXAi...            # long-lived access token
+  # Entities used: light.<name>, media_player.tv, climate.home
+
+  # ---- MARKETS: forex / crypto / indices + rate watchers ----
+  markets:
+    poll_minutes: 5          # how often providers are re-polled (cached between)
+    pairs: [EURUSD, GBPUSD, USDJPY, USDZAR]   # stooq symbols, 6 letters
+    crypto: [bitcoin, ethereum]               # coingecko ids
+    # indices: {"^spx": "S&P 500", "xauusd": "Gold"}   # optional override
+    # Providers (no keys needed): stooq -> frankfurter(ECB) -> open.er-api,
+    # crypto via coingecko. Offline + --demo falls back to a labelled sim feed.
+
+  # ---- SELF: JARVIS watching and rewriting itself ----
+  self:
+    enabled: true
+    tune_every_minutes: 5   # how often the self-improvement pass runs
+    alias_min_uses: 2       # repeats of a misunderstood phrase before it's
+                            # mined into a permanent self-taught rule
+    routine_min_days: 3     # distinct days of a repeated request before it
+                            # becomes a self-created scheduled routine
+    # The SELF engine journals every turn, reads your thanks/corrections as
+    # reward signals, tunes its own proactive cooldowns from them, marks
+    # flaky tools degraded, and explains itself on "why did you say that?".
+
+  # ---- CALENDAR: meetings made real (autopilot + briefings + import) ----
+  calendar:
+    lead_minutes: 10    # how far before a meeting to start prepping
+    # Import your real calendar any time: "import my calendar from work.ics"
+    # (export .ics from Google/Outlook/Apple Calendar) or via the LLM brain.
+
+  # ---- PREP: JARVIS getting itself ready before you ask ----
+  prep:
+    enabled: true
+    mode: auto            # auto = fire due preps itself and announce them;
+                          # ask  = banner "Shall I prep ...?" first
+    lead_minutes: 5       # how far ahead of a learned time to offer the prep
+    catchup_minutes: 15   # how long after the time to still offer it
+    min_habit_weight: 1.8 # how strong a habit must be before auto-prep
+    routines:
+      morning:            # scheduled: fires at 08:30 on weekdays
+        at: "08:30"
+        weekdays: [mon, tue, wed, thu, fri]
+        actions: ["weather", "brief me"]
+      work:               # on-demand: "prep work"
+        actions: ["open vscode", "open terminal", "open slack"]
+      # scenes: routines you fire by name — "good morning", "movie night",
+      # "good night". Actions can be anything JARVIS understands, including
+      # home ("lights off all", "tv on"), music ("play focus music") and briefs.
+      good-morning:
+        actions: ["brief me", "lights on kitchen", "play focus music"]
+      movie-night:
+        actions: ["lights off all", "tv on", "play movie night", "volume 30"]
+      good-night:
+        actions: ["lights off all", "tv off", "pause the music"]
+
+  learner:
+    proactive: true       # JARVIS suggests things based on learned habits
+    min_uses: 2           # how many times before something counts as a habit
+    window_hours: 1       # how close "now" must be to a learned time slot
+
+  web:
+    host: 127.0.0.1
+    port: 8595
+
+  memory:
+    db: data/memory.db
+
+  # v9 — push bridges (Telegram / email). Empty = nothing leaves this machine;
+  # every message is honestly logged to the outbox instead of being faked.
+  push:
+    mode: alerts            # alerts | all | off
+    telegram:
+      bot_token: ""         # or env JARVIS_TELEGRAM_TOKEN
+      chat_id: ""           # or env JARVIS_TELEGRAM_CHAT
+    mail:
+      smtp_host: ""
+      smtp_port: 587
+      username: ""
+      password: ""
+      mail_from: ""
+      mail_to: ""
+
+  # v9 — overnight digest: alerts in quiet_hours are stashed, not pushed.
+  digest:
+    enabled: true
+    quiet_hours: [23, 7]
+
+  # v9 — real headless Chromium via Playwright when installed; honest
+  # plain-text fallback otherwise.
+  # v10 — integration (autostart & desktop notifications). `jarvis install`
+  # wires run.py into systemd/launchd/autostart/Termux and drops a `jarvis`
+  # command in ~/.local/bin. notify: auto = desktop-ping for red alerts when
+  # notify-send exists; on/off to force.
+  integration:
+    notify: auto
+  browser:
+    enabled: true
+    timeout_s: 20

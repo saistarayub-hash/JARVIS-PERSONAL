@@ -1,0 +1,39 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  units:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: install deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+      - name: config for offline tests
+        run: cp config.example.yaml config.yaml
+      - name: unit suites
+        run: |
+          for t in test_tasks test_self test_push test_integration test_llmkey \
+                   test_bridges test_providers; do
+            echo "::group::$t"
+            python -u tests/$t.py
+            echo "::endgroup::"
+          done
+      - name: boot smoke test (core actually starts headless)
+        run: |
+          JARVIS_DIGEST_DISABLE=1 python -u run.py --demo --headless \
+              --no-voice --port 8595 &
+          SRV=$!
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8595/api/state && break
+            sleep 1
+          done
+          kill $SRV

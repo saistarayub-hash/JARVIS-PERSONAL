@@ -1,0 +1,11 @@
+# Full voice mode: "Hey JARVIS" wake word, local Whisper STT, spoken replies.
+-r requirements.txt
+faster-whisper>=1.0
+sounddevice>=0.4
+numpy
+openwakeword>=0.6
+
+# TTS — pick one (Piper = the real JARVIS-ish British voice):
+piper-tts
+# pyttsx3     # zero-model fallback (robotic, but works everywhere)
+# espeak-ng   # install via your OS package manager (apt/brew)
