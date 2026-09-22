@@ -87,5 +87,7 @@ if [ "$SERVICE" = "1" ]; then
   say "done. Core starts with login; UI at http://127.0.0.1:8595; 'jarvis <words>' anywhere."
   exit 0
 fi
-say "starting JARVIS core — hologram UI opens at http://127.0.0.1:8595"
+UIPORT=8595
+for ((i=0; i<${#ARGS[@]}; i++)); do [ "${ARGS[$i]}" = "--port" ] && UIPORT="${ARGS[$((i+1))]}"; done
+say "starting JARVIS core — hologram UI opens at http://127.0.0.1:$UIPORT"
 exec "$VPY" run.py "${ARGS[@]+"${ARGS[@]}"}"
